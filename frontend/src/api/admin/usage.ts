@@ -114,6 +114,21 @@ export async function revealCodexTurnState(id: number): Promise<{ usage_log_id: 
   return data
 }
 
+export interface CodexTurnStateStats {
+  start_time: string
+  end_time: string
+  total_usage_logs: number
+  saved_turn_states: number
+  missing_turn_states: number
+  by_length: Record<string, number>
+  by_transport: Record<string, number>
+}
+
+export async function getCodexTurnStateStats(params?: { start_date?: string; end_date?: string }): Promise<CodexTurnStateStats> {
+  const { data } = await apiClient.get<CodexTurnStateStats>('/admin/usage/codex-turn-state/stats', { params })
+  return data
+}
+
 // ==================== API Functions ====================
 
 /**

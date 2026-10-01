@@ -455,6 +455,9 @@ const loadModelStats = async (source: ModelDistributionSource, force = false) =>
       native_compaction_v2: filters.value.native_compaction_v2,
       billing_type: filters.value.billing_type,
 	  upstream_model_mismatch: filters.value.upstream_model_mismatch,
+	  codex_turn_state_present: filters.value.codex_turn_state_present,
+	  codex_turn_state_length: filters.value.codex_turn_state_length,
+	  codex_turn_state_transport: filters.value.codex_turn_state_transport,
     }
 
     const response = await adminAPI.dashboard.getModelStats({ ...baseParams, model_source: source })
@@ -506,6 +509,9 @@ const loadChartData = async () => {
       native_compaction_v2: filters.value.native_compaction_v2,
       billing_type: filters.value.billing_type,
 	  upstream_model_mismatch: filters.value.upstream_model_mismatch,
+	  codex_turn_state_present: filters.value.codex_turn_state_present,
+	  codex_turn_state_length: filters.value.codex_turn_state_length,
+	  codex_turn_state_transport: filters.value.codex_turn_state_transport,
       include_stats: false,
       include_trend: true,
       include_model_stats: false,

@@ -58,6 +58,9 @@ export interface TrendParams {
   native_compaction_v2?: boolean | null
   billing_type?: number | null
 	upstream_model_mismatch?: boolean
+	codex_turn_state_present?: boolean
+	codex_turn_state_length?: number
+	codex_turn_state_transport?: 'http' | 'sse' | 'ws'
 }
 
 export interface TrendResponse {
@@ -91,6 +94,9 @@ export interface ModelStatsParams {
   native_compaction_v2?: boolean | null
   billing_type?: number | null
 	upstream_model_mismatch?: boolean
+	codex_turn_state_present?: boolean
+	codex_turn_state_length?: number
+	codex_turn_state_transport?: 'http' | 'sse' | 'ws'
 }
 
 export interface ModelStatsResponse {
@@ -121,6 +127,9 @@ export interface GroupStatsParams {
   native_compaction_v2?: boolean | null
   billing_type?: number | null
 	upstream_model_mismatch?: boolean
+	codex_turn_state_present?: boolean
+	codex_turn_state_length?: number
+	codex_turn_state_transport?: 'http' | 'sse' | 'ws'
 }
 
 export interface GroupStatsResponse {

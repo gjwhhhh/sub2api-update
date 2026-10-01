@@ -47,28 +47,30 @@ type dashboardSnapshotV2Filters struct {
 	NativeCompactionV2    *bool
 	BillingType           *int8
 	UpstreamModelMismatch *bool
+	CodexTurnState        usagestats.CodexTurnStateFilter
 }
 
 type dashboardSnapshotV2CacheKey struct {
-	StartTime             string `json:"start_time"`
-	EndTime               string `json:"end_time"`
-	Granularity           string `json:"granularity"`
-	UserID                int64  `json:"user_id"`
-	APIKeyID              int64  `json:"api_key_id"`
-	AccountID             int64  `json:"account_id"`
-	GroupID               int64  `json:"group_id"`
-	Model                 string `json:"model"`
-	RequestType           *int16 `json:"request_type"`
-	Stream                *bool  `json:"stream"`
-	NativeCompactionV2    *bool  `json:"native_compaction_v2"`
-	BillingType           *int8  `json:"billing_type"`
-	UpstreamModelMismatch *bool  `json:"upstream_model_mismatch"`
-	IncludeStats          bool   `json:"include_stats"`
-	IncludeTrend          bool   `json:"include_trend"`
-	IncludeModels         bool   `json:"include_models"`
-	IncludeGroups         bool   `json:"include_groups"`
-	IncludeUsersTrend     bool   `json:"include_users_trend"`
-	UsersTrendLimit       int    `json:"users_trend_limit"`
+	StartTime             string                          `json:"start_time"`
+	EndTime               string                          `json:"end_time"`
+	Granularity           string                          `json:"granularity"`
+	UserID                int64                           `json:"user_id"`
+	APIKeyID              int64                           `json:"api_key_id"`
+	AccountID             int64                           `json:"account_id"`
+	GroupID               int64                           `json:"group_id"`
+	Model                 string                          `json:"model"`
+	RequestType           *int16                          `json:"request_type"`
+	Stream                *bool                           `json:"stream"`
+	NativeCompactionV2    *bool                           `json:"native_compaction_v2"`
+	BillingType           *int8                           `json:"billing_type"`
+	UpstreamModelMismatch *bool                           `json:"upstream_model_mismatch"`
+	CodexTurnState        usagestats.CodexTurnStateFilter `json:"codex_turn_state"`
+	IncludeStats          bool                            `json:"include_stats"`
+	IncludeTrend          bool                            `json:"include_trend"`
+	IncludeModels         bool                            `json:"include_models"`
+	IncludeGroups         bool                            `json:"include_groups"`
+	IncludeUsersTrend     bool                            `json:"include_users_trend"`
+	UsersTrendLimit       int                             `json:"users_trend_limit"`
 }
 
 func (h *DashboardHandler) GetSnapshotV2(c *gin.Context) {
@@ -110,6 +112,7 @@ func (h *DashboardHandler) GetSnapshotV2(c *gin.Context) {
 		NativeCompactionV2:    filters.NativeCompactionV2,
 		BillingType:           filters.BillingType,
 		UpstreamModelMismatch: filters.UpstreamModelMismatch,
+		CodexTurnState:        filters.CodexTurnState,
 		IncludeStats:          includeStats,
 		IncludeTrend:          includeTrend,
 		IncludeModels:         includeModels,
@@ -192,6 +195,7 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 			filters.NativeCompactionV2,
 			filters.BillingType,
 			filters.UpstreamModelMismatch,
+			filters.CodexTurnState,
 		)
 		if err != nil {
 			return nil, errors.New("failed to get usage trend")
@@ -214,6 +218,7 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 			filters.NativeCompactionV2,
 			filters.BillingType,
 			filters.UpstreamModelMismatch,
+			filters.CodexTurnState,
 		)
 		if err != nil {
 			return nil, errors.New("failed to get model statistics")
@@ -235,6 +240,7 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 			filters.NativeCompactionV2,
 			filters.BillingType,
 			filters.UpstreamModelMismatch,
+			filters.CodexTurnState,
 		)
 		if err != nil {
 			return nil, errors.New("failed to get group statistics")
@@ -325,6 +331,11 @@ func parseDashboardSnapshotV2Filters(c *gin.Context) (*dashboardSnapshotV2Filter
 			return nil, err
 		}
 		filters.UpstreamModelMismatch = &value
+	}
+	if codex, err := parseCodexTurnStateDashboardFilter(c); err != nil {
+		return nil, err
+	} else {
+		filters.CodexTurnState = codex
 	}
 
 	return filters, nil

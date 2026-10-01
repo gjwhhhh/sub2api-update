@@ -76,6 +76,32 @@ func parseOptionalBoolDashboardFilter(c *gin.Context, name string) (*bool, error
 	return &value, nil
 }
 
+func parseCodexTurnStateDashboardFilter(c *gin.Context) (usagestats.CodexTurnStateFilter, error) {
+	var filter usagestats.CodexTurnStateFilter
+	if raw := strings.TrimSpace(c.Query("codex_turn_state_present")); raw != "" {
+		value, err := strconv.ParseBool(raw)
+		if err != nil {
+			return filter, errors.New("Invalid codex_turn_state_present value, use true or false")
+		}
+		filter.Present = &value
+	}
+	if raw := strings.TrimSpace(c.Query("codex_turn_state_length")); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil || value < 0 {
+			return filter, errors.New("Invalid codex_turn_state_length value")
+		}
+		filter.Length = &value
+	}
+	filter.Transport = strings.TrimSpace(c.Query("codex_turn_state_transport"))
+	if filter.Present != nil && !*filter.Present && (filter.Length != nil || filter.Transport != "") {
+		return filter, errors.New("codex_turn_state_present=false cannot be combined with length or transport")
+	}
+	if filter.Transport != "" && filter.Transport != "http" && filter.Transport != "sse" && filter.Transport != "ws" {
+		return filter, errors.New("Invalid codex_turn_state_transport value")
+	}
+	return filter, nil
+}
+
 // GetStats handles getting dashboard statistics
 // GET /api/v1/admin/dashboard/stats
 func (h *DashboardHandler) GetStats(c *gin.Context) {
@@ -272,8 +298,13 @@ func (h *DashboardHandler) GetUsageTrend(c *gin.Context) {
 		response.BadRequest(c, "Invalid upstream_model_mismatch value, use true or false")
 		return
 	}
+	codexTurnState, err := parseCodexTurnStateDashboardFilter(c)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 
-	trend, hit, err := h.getUsageTrendCached(c.Request.Context(), startTime, endTime, granularity, userID, apiKeyID, accountID, groupID, model, requestType, stream, nativeCompactionV2, billingType, upstreamModelMismatch)
+	trend, hit, err := h.getUsageTrendCached(c.Request.Context(), startTime, endTime, granularity, userID, apiKeyID, accountID, groupID, model, requestType, stream, nativeCompactionV2, billingType, upstreamModelMismatch, codexTurnState)
 	if err != nil {
 		response.Error(c, 500, "Failed to get usage trend")
 		return
@@ -364,8 +395,13 @@ func (h *DashboardHandler) GetModelStats(c *gin.Context) {
 		response.BadRequest(c, "Invalid upstream_model_mismatch value, use true or false")
 		return
 	}
+	codexTurnState, err := parseCodexTurnStateDashboardFilter(c)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 
-	stats, hit, err := h.getModelStatsCached(c.Request.Context(), startTime, endTime, userID, apiKeyID, accountID, groupID, modelSource, requestType, stream, nativeCompactionV2, billingType, upstreamModelMismatch)
+	stats, hit, err := h.getModelStatsCached(c.Request.Context(), startTime, endTime, userID, apiKeyID, accountID, groupID, modelSource, requestType, stream, nativeCompactionV2, billingType, upstreamModelMismatch, codexTurnState)
 	if err != nil {
 		response.Error(c, 500, "Failed to get model statistics")
 		return
@@ -446,8 +482,13 @@ func (h *DashboardHandler) GetGroupStats(c *gin.Context) {
 		response.BadRequest(c, "Invalid upstream_model_mismatch value, use true or false")
 		return
 	}
+	codexTurnState, err := parseCodexTurnStateDashboardFilter(c)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 
-	stats, hit, err := h.getGroupStatsCached(c.Request.Context(), startTime, endTime, userID, apiKeyID, accountID, groupID, requestType, stream, nativeCompactionV2, billingType, upstreamModelMismatch)
+	stats, hit, err := h.getGroupStatsCached(c.Request.Context(), startTime, endTime, userID, apiKeyID, accountID, groupID, requestType, stream, nativeCompactionV2, billingType, upstreamModelMismatch, codexTurnState)
 	if err != nil {
 		response.Error(c, 500, "Failed to get group statistics")
 		return

@@ -188,6 +188,18 @@ func (s *UsageService) RevealCodexTurnState(ctx context.Context, id int64) (stri
 	return state, meta, nil
 }
 
+func (s *UsageService) GetCodexTurnStateStats(ctx context.Context, startTime, endTime time.Time) (*CodexTurnStateStats, error) {
+	reader, ok := s.usageRepo.(CodexTurnStateStatsReader)
+	if !ok {
+		return nil, ErrCodexTurnStateUnavailable
+	}
+	stats, err := reader.GetCodexTurnStateStats(ctx, startTime, endTime)
+	if err != nil {
+		return nil, fmt.Errorf("get codex turn state stats: %w", err)
+	}
+	return stats, nil
+}
+
 // ListByUser 获取用户的使用日志列表
 func (s *UsageService) ListByUser(ctx context.Context, userID int64, params pagination.PaginationParams) ([]UsageLog, *pagination.PaginationResult, error) {
 	logs, pagination, err := s.usageRepo.ListByUser(ctx, userID, params)

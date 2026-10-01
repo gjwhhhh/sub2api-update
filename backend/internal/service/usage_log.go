@@ -237,6 +237,16 @@ type CodexTurnStateMetadata struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+type CodexTurnStateStats struct {
+	StartTime         time.Time        `json:"start_time"`
+	EndTime           time.Time        `json:"end_time"`
+	TotalUsageLogs    int64            `json:"total_usage_logs"`
+	SavedTurnStates   int64            `json:"saved_turn_states"`
+	MissingTurnStates int64            `json:"missing_turn_states"`
+	ByLength          map[int]int64    `json:"by_length"`
+	ByTransport       map[string]int64 `json:"by_transport"`
+}
+
 func (u *UsageLog) TotalTokens() int {
 	return u.InputTokens + u.OutputTokens + u.CacheCreationTokens + u.CacheReadTokens
 }

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -53,6 +54,50 @@ func (r *usageLogRepository) RevealCodexTurnState(ctx context.Context, usageLogI
 		return "", nil, errors.New("codex turn-state length mismatch")
 	}
 	return state, &meta, nil
+}
+
+func (r *usageLogRepository) GetCodexTurnStateStats(ctx context.Context, startTime, endTime time.Time) (*service.CodexTurnStateStats, error) {
+	if r == nil || r.sql == nil {
+		return nil, errors.New("codex turn-state database is not configured")
+	}
+	stats := &service.CodexTurnStateStats{StartTime: startTime, EndTime: endTime, ByLength: map[int]int64{}, ByTransport: map[string]int64{}}
+	if err := scanSingleRow(ctx, r.sql, `SELECT COUNT(*), COUNT(cts.usage_log_id), COUNT(*) - COUNT(cts.usage_log_id)
+		FROM usage_logs ul LEFT JOIN codex_turn_states cts ON cts.usage_log_id = ul.id
+		WHERE ul.created_at >= $1 AND ul.created_at < $2`, []any{startTime, endTime}, &stats.TotalUsageLogs, &stats.SavedTurnStates, &stats.MissingTurnStates); err != nil {
+		return nil, err
+	}
+	rows, err := r.sql.QueryContext(ctx, `SELECT state_length, COUNT(*) FROM codex_turn_states WHERE created_at >= $1 AND created_at < $2 GROUP BY state_length ORDER BY state_length`, startTime, endTime)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var length int
+		var count int64
+		if err := rows.Scan(&length, &count); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		stats.ByLength[length] = count
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	rows, err = r.sql.QueryContext(ctx, `SELECT transport, COUNT(*) FROM codex_turn_states WHERE created_at >= $1 AND created_at < $2 GROUP BY transport ORDER BY transport`, startTime, endTime)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var transport string
+		var count int64
+		if err := rows.Scan(&transport, &count); err != nil {
+			return nil, err
+		}
+		stats.ByTransport[transport] = count
+	}
+	return stats, rows.Err()
 }
 
 func (r *usageLogRepository) hydrateCodexTurnStateMetadata(ctx context.Context, logs []service.UsageLog) error {

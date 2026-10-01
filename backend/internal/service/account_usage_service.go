@@ -96,6 +96,10 @@ type CodexTurnStateRevealer interface {
 	RevealCodexTurnState(ctx context.Context, usageLogID int64) (string, *CodexTurnStateMetadata, error)
 }
 
+type CodexTurnStateStatsReader interface {
+	GetCodexTurnStateStats(ctx context.Context, startTime, endTime time.Time) (*CodexTurnStateStats, error)
+}
+
 type accountWindowStatsBatchReader interface {
 	GetAccountWindowStatsBatch(ctx context.Context, accountIDs []int64, startTime time.Time) (map[int64]*usagestats.AccountStats, error)
 }

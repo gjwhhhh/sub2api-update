@@ -82,6 +82,37 @@ func (h *UsageHandler) RevealCodexTurnState(c *gin.Context) {
 	response.Success(c, gin.H{"usage_log_id": id, "state": state, "metadata": meta})
 }
 
+func (h *UsageHandler) CodexTurnStateStats(c *gin.Context) {
+	end := time.Now().UTC()
+	start := end.Add(-7 * 24 * time.Hour)
+	if raw := strings.TrimSpace(c.Query("start_date")); raw != "" {
+		parsed, err := time.Parse("2006-01-02", raw)
+		if err != nil {
+			response.BadRequest(c, "Invalid start_date format, use YYYY-MM-DD")
+			return
+		}
+		start = parsed.UTC()
+	}
+	if raw := strings.TrimSpace(c.Query("end_date")); raw != "" {
+		parsed, err := time.Parse("2006-01-02", raw)
+		if err != nil {
+			response.BadRequest(c, "Invalid end_date format, use YYYY-MM-DD")
+			return
+		}
+		end = parsed.UTC().Add(24 * time.Hour)
+	}
+	if !start.Before(end) {
+		response.BadRequest(c, "start_date must be before end_date")
+		return
+	}
+	stats, err := h.usageService.GetCodexTurnStateStats(c.Request.Context(), start, end)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, stats)
+}
+
 // CreateUsageCleanupTaskRequest represents cleanup task creation request
 type CreateUsageCleanupTaskRequest struct {
 	StartDate   string  `json:"start_date"`

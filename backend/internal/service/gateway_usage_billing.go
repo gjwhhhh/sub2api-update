@@ -629,8 +629,22 @@ func writeUsageLogBestEffort(ctx context.Context, repo UsageLogRepository, usage
 		}
 		stateCtx, cancel := detachedBillingContext(ctx)
 		defer cancel()
-		if err := writer.CreateCodexTurnState(stateCtx, usageLog); err != nil {
-			logger.LegacyPrintf(logKey, "Create Codex turn-state sidecar failed: %v", err)
+		var err error
+		for attempt := 0; attempt < 3; attempt++ {
+			err = writer.CreateCodexTurnState(stateCtx, usageLog)
+			if err == nil {
+				break
+			}
+			if attempt < 2 {
+				select {
+				case <-stateCtx.Done():
+					attempt = 2
+				case <-time.After(time.Duration(attempt+1) * 50 * time.Millisecond):
+				}
+			}
+		}
+		if err != nil {
+			logger.LegacyPrintf(logKey, "Create Codex turn-state sidecar failed after retries: %v", err)
 		}
 	}()
 	usageCtx, cancel := detachedBillingContext(ctx)
