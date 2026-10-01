@@ -99,6 +99,21 @@ func extractOpenAICodexTurnState(upstream http.Header) string {
 	return strings.TrimSpace(upstream.Get(openAICodexTurnStateHeader))
 }
 
+func codexTurnStateSnapshot(value string, upstream http.Header, transport string) *CodexTurnStateSnapshot {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		value = extractOpenAICodexTurnState(upstream)
+	}
+	if value == "" {
+		return nil
+	}
+	transport = strings.TrimSpace(transport)
+	if transport == "" {
+		transport = "http"
+	}
+	return &CodexTurnStateSnapshot{Value: value, Transport: transport}
+}
+
 // noteOpenAICodexTurnStateProvenance 记录（下游会话 → 铸造账号）。
 func (s *OpenAIGatewayService) noteOpenAICodexTurnStateProvenance(c *gin.Context, account *Account) {
 	if s == nil || account == nil || account.ID <= 0 {

@@ -139,9 +139,10 @@ func appendUsageLogModelQueryFilter(query string, args []any, model string, sour
 }
 
 type usageLogRepository struct {
-	client *dbent.Client
-	sql    sqlExecutor
-	db     *sql.DB
+	client             *dbent.Client
+	sql                sqlExecutor
+	db                 *sql.DB
+	turnStateEncryptor service.SecretEncryptor
 
 	createBatchOnce     sync.Once
 	createBatchCh       chan usageLogCreateRequest
@@ -150,13 +151,21 @@ type usageLogRepository struct {
 	bestEffortRecent    *gocache.Cache
 }
 
-func NewUsageLogRepository(client *dbent.Client, sqlDB *sql.DB) service.UsageLogRepository {
-	return newUsageLogRepositoryWithSQL(client, sqlDB)
+func NewUsageLogRepository(client *dbent.Client, sqlDB *sql.DB, encryptors ...service.SecretEncryptor) service.UsageLogRepository {
+	var encryptor service.SecretEncryptor
+	if len(encryptors) > 0 {
+		encryptor = encryptors[0]
+	}
+	return newUsageLogRepositoryWithSQLAndEncryptor(client, sqlDB, encryptor)
 }
 
 func newUsageLogRepositoryWithSQL(client *dbent.Client, sqlq sqlExecutor) *usageLogRepository {
+	return newUsageLogRepositoryWithSQLAndEncryptor(client, sqlq, nil)
+}
+
+func newUsageLogRepositoryWithSQLAndEncryptor(client *dbent.Client, sqlq sqlExecutor, encryptor service.SecretEncryptor) *usageLogRepository {
 	// 使用 scanSingleRow 替代 QueryRowContext，保证 ent.Tx 作为 sqlExecutor 可用。
-	repo := &usageLogRepository{client: client, sql: sqlq}
+	repo := &usageLogRepository{client: client, sql: sqlq, turnStateEncryptor: encryptor}
 	if db, ok := sqlq.(*sql.DB); ok {
 		repo.db = db
 	}

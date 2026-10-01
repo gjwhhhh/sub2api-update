@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -73,6 +74,25 @@ func TestRelayOpenAICodexTurnState_ClearsStaleValueWhenUpstreamAbsent(t *testing
 	require.Empty(t, c.Writer.Header().Get("X-Codex-Turn-State"))
 	_, ok := svc.openaiCodexTurnStateOrigins.Load("7\x00sess-stale")
 	require.False(t, ok)
+}
+
+func TestCodexTurnStateSnapshot(t *testing.T) {
+	state292 := strings.Repeat("a", 292)
+	snapshot := codexTurnStateSnapshot("", http.Header{
+		"X-Codex-Turn-State": []string{state292},
+	}, "")
+	require.NotNil(t, snapshot)
+	require.Equal(t, state292, snapshot.Value)
+	require.Equal(t, "http", snapshot.Transport)
+	require.Len(t, []byte(snapshot.Value), 292)
+
+	state312 := strings.Repeat("b", 312)
+	snapshot = codexTurnStateSnapshot(state312, nil, "ws")
+	require.NotNil(t, snapshot)
+	require.Equal(t, "ws", snapshot.Transport)
+	require.Len(t, []byte(snapshot.Value), 312)
+
+	require.Nil(t, codexTurnStateSnapshot("", nil, "http"))
 }
 
 func TestStageOpenAICodexTurnState_StagedHeaders(t *testing.T) {

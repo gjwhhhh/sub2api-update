@@ -1310,6 +1310,8 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		forwardResult := &OpenAIForwardResult{
 			RequestID:                     resp.Header.Get("x-request-id"),
 			UpstreamHeaders:               resp.Header,
+			CodexTurnState:                extractOpenAICodexTurnState(resp.Header),
+			CodexTurnStateTransport:       "http",
 			ResponseID:                    responseID,
 			Usage:                         *usage,
 			Model:                         originalModel,

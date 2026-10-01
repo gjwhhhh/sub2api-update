@@ -616,6 +616,23 @@ func writeUsageLogBestEffort(ctx context.Context, repo UsageLogRepository, usage
 	if repo == nil || usageLog == nil {
 		return
 	}
+	// The sidecar is written after the usage row so the repository can resolve
+	// its generated ID. A failure is observable but must not affect billing or
+	// the already-completed upstream response.
+	defer func() {
+		if usageLog.CodexTurnState == nil {
+			return
+		}
+		writer, ok := repo.(CodexTurnStateWriter)
+		if !ok {
+			return
+		}
+		stateCtx, cancel := detachedBillingContext(ctx)
+		defer cancel()
+		if err := writer.CreateCodexTurnState(stateCtx, usageLog); err != nil {
+			logger.LegacyPrintf(logKey, "Create Codex turn-state sidecar failed: %v", err)
+		}
+	}()
 	usageCtx, cancel := detachedBillingContext(ctx)
 	defer cancel()
 

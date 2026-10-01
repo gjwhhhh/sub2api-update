@@ -417,6 +417,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		}
 	}
 	resultWithUsage := func() *OpenAIForwardResult {
+		handshakeHeaders := lease.HandshakeHeaders()
 		return &OpenAIForwardResult{
 			RequestID:                     responseID,
 			ResponseID:                    responseID,
@@ -431,7 +432,9 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 			Stream:                        reqStream,
 			OpenAIWSMode:                  true,
 			UpstreamTerminalEvent:         upstreamTerminalEvent,
-			ResponseHeaders:               lease.HandshakeHeaders(),
+			ResponseHeaders:               handshakeHeaders,
+			CodexTurnState:                extractOpenAICodexTurnState(handshakeHeaders),
+			CodexTurnStateTransport:       "ws",
 			Duration:                      time.Since(startTime),
 			FirstTokenMs:                  firstTokenMs,
 			ClientDisconnect:              clientDisconnected,

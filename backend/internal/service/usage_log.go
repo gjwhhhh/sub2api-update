@@ -190,6 +190,9 @@ type UsageLog struct {
 	// extra.upstream_request_id_header 指定的头；账户未指定头名、WS 轮次
 	// 与上游没有该头的路径为 nil。
 	UpstreamRequestID *string
+	// CodexTurnState is the plaintext value captured from the final successful
+	// OpenAI response. It is transient and is encrypted before persistence.
+	CodexTurnState *CodexTurnStateSnapshot
 
 	// Cache TTL Override 标记（管理员强制替换了缓存 TTL 计费）
 	CacheTTLOverridden bool
@@ -215,6 +218,14 @@ type UsageLog struct {
 	Account      *Account
 	Group        *Group
 	Subscription *UserSubscription
+}
+
+// CodexTurnStateSnapshot contains the opaque OpenAI Codex turn state that was
+// returned to the client for a successful request. The plaintext must never be
+// logged or exposed by the normal usage-log APIs.
+type CodexTurnStateSnapshot struct {
+	Value     string
+	Transport string
 }
 
 func (u *UsageLog) TotalTokens() int {

@@ -80,6 +80,14 @@ type UsageLogRepository interface {
 	GetDailyStatsAggregated(ctx context.Context, userID int64, startTime, endTime time.Time) ([]map[string]any, error)
 }
 
+// CodexTurnStateWriter is implemented by repositories that durably persist
+// the encrypted turn-state sidecar after its usage log has been written.
+// It is intentionally optional so existing usage-log test doubles remain
+// source-compatible.
+type CodexTurnStateWriter interface {
+	CreateCodexTurnState(ctx context.Context, log *UsageLog) error
+}
+
 type accountWindowStatsBatchReader interface {
 	GetAccountWindowStatsBatch(ctx context.Context, accountIDs []int64, startTime time.Time) (map[int64]*usagestats.AccountStats, error)
 }

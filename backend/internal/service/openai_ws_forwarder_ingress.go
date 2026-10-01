@@ -739,6 +739,8 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			if bridgeTurnState := strings.TrimSpace(result.ResponseHeaders.Get(openAIWSTurnStateHeader)); bridgeTurnState != "" {
 				// Follow-up turns on this bridge retain their own upstream state;
 				// publishing it by session hash would leak it to independent bridges.
+				result.CodexTurnState = bridgeTurnState
+				result.CodexTurnStateTransport = "http"
 				turnState = bridgeTurnState
 			}
 			responseID := strings.TrimSpace(result.RequestID)
@@ -1237,6 +1239,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 					)
 				}
 				imageCount := imageCounter.Count()
+				handshakeHeaders := lease.HandshakeHeaders()
 				result := &OpenAIForwardResult{
 					RequestID:                     responseID,
 					Usage:                         usage,
@@ -1251,7 +1254,9 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 					Stream:                        reqStream,
 					OpenAIWSMode:                  true,
 					UpstreamTerminalEvent:         terminalEvent,
-					ResponseHeaders:               lease.HandshakeHeaders(),
+					ResponseHeaders:               handshakeHeaders,
+					CodexTurnState:                extractOpenAICodexTurnState(handshakeHeaders),
+					CodexTurnStateTransport:       "ws",
 					Duration:                      time.Since(turnStart),
 					FirstTokenMs:                  firstTokenMs,
 				}
