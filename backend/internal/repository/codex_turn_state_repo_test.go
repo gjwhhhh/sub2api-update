@@ -22,7 +22,7 @@ func (codexTurnStateTestEncryptor) Decrypt(value string) (string, error) {
 	return value, nil
 }
 
-func TestCreateCodexTurnStatePersistsEncryptedSidecar(t *testing.T) {
+func TestCreateCodexTurnStatePersistsPlaintextSidecar(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
@@ -49,8 +49,8 @@ func TestCreateCodexTurnStatePersistsEncryptedSidecar(t *testing.T) {
 	mock.ExpectExec("INSERT INTO codex_turn_states").
 		WithArgs(
 			int64(77), int64(3), int64(4), requestID, upstreamRequestID,
-			sessionID, "gpt-5.6-sol", "ws", "cipher:"+state, len(state),
-			hex.EncodeToString(digest[:]),
+			sessionID, "gpt-5.6-sol", "ws", len(state),
+			hex.EncodeToString(digest[:]), state,
 		).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -73,10 +73,10 @@ func TestRevealCodexTurnStateDecryptsAndReturnsMetadata(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 	created := time.Date(2026, 10, 1, 1, 2, 3, 0, time.UTC)
-	mock.ExpectQuery("SELECT usage_log_id, state_ciphertext, state_length").
+	mock.ExpectQuery(`SELECT usage_log_id, COALESCE\(state_plaintext`).
 		WithArgs(int64(77)).
-		WillReturnRows(sqlmock.NewRows([]string{"usage_log_id", "state_ciphertext", "state_length", "state_sha256", "transport", "created_at"}).
-			AddRow(int64(77), "cipher:turn-state-value", 23, "digest", "sse", created))
+		WillReturnRows(sqlmock.NewRows([]string{"usage_log_id", "state_plaintext", "state_ciphertext", "state_length", "state_sha256", "transport", "created_at"}).
+			AddRow(int64(77), "", "cipher:turn-state-value", 23, "digest", "sse", created))
 	repo := newUsageLogRepositoryWithSQLAndEncryptor(nil, db, codexTurnStateTestEncryptor{})
 	state, meta, err := repo.RevealCodexTurnState(context.Background(), 77)
 	require.NoError(t, err)

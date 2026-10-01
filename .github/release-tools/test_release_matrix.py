@@ -44,6 +44,10 @@ class ReleaseMatrixTest(unittest.TestCase):
                     info.size = 7
                     info.mode = 0o755
                     out.addfile(info, io.BytesIO(b'fixture'))
+                    info = tarfile.TarInfo('migrate-codex-turn-states-plaintext')
+                    info.size = 7
+                    info.mode = 0o755
+                    out.addfile(info, io.BytesIO(b'migrate'))
             else:
                 archive.write_bytes(b'fixture archive')
             metadata = {'version': '9.8.7', 'sha': 'a' * 40, 'target': target,
@@ -120,6 +124,9 @@ class ReleaseMatrixTest(unittest.TestCase):
             binary = Path('contexts') / arch / 'sub2api'
             self.assertEqual(binary.read_bytes(), b'fixture')
             self.assertEqual(binary.stat().st_mode & 0o777, 0o755)
+            migration = Path('contexts') / arch / 'migrate-codex-turn-states-plaintext'
+            self.assertEqual(migration.read_bytes(), b'migrate')
+            self.assertEqual(migration.stat().st_mode & 0o777, 0o755)
 
     def test_plan_requires_a_tag_for_publication(self):
         args = argparse.Namespace(ref='main', dry_run=False, simple=False)

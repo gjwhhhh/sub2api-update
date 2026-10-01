@@ -30,25 +30,31 @@ func (r *usageLogRepository) GetCodexTurnStateMetadata(ctx context.Context, usag
 }
 
 func (r *usageLogRepository) RevealCodexTurnState(ctx context.Context, usageLogID int64) (string, *service.CodexTurnStateMetadata, error) {
-	if r == nil || r.sql == nil || r.turnStateEncryptor == nil {
-		return "", nil, errors.New("codex turn-state encryption is not configured")
+	if r == nil || r.sql == nil {
+		return "", nil, errors.New("codex turn-state database is not configured")
 	}
-	decryptor, ok := r.turnStateEncryptor.(interface{ Decrypt(string) (string, error) })
-	if !ok {
-		return "", nil, errors.New("codex turn-state decryptor is not configured")
-	}
-	var ciphertext string
+	var plaintext, ciphertext string
 	var meta service.CodexTurnStateMetadata
-	err := scanSingleRow(ctx, r.sql, `SELECT usage_log_id, state_ciphertext, state_length, state_sha256, transport, created_at FROM codex_turn_states WHERE usage_log_id = $1`, []any{usageLogID}, &meta.UsageLogID, &ciphertext, &meta.Length, &meta.SHA256, &meta.Transport, &meta.CreatedAt)
+	err := scanSingleRow(ctx, r.sql, `SELECT usage_log_id, COALESCE(state_plaintext, ''), COALESCE(state_ciphertext, ''), state_length, state_sha256, transport, created_at FROM codex_turn_states WHERE usage_log_id = $1`, []any{usageLogID}, &meta.UsageLogID, &plaintext, &ciphertext, &meta.Length, &meta.SHA256, &meta.Transport, &meta.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil, nil
 	}
 	if err != nil {
 		return "", nil, err
 	}
-	state, err := decryptor.Decrypt(ciphertext)
-	if err != nil {
-		return "", nil, fmt.Errorf("decrypt codex turn-state: %w", err)
+	state := plaintext
+	if state == "" {
+		if ciphertext == "" {
+			return "", nil, errors.New("codex turn-state has no plaintext or ciphertext")
+		}
+		decryptor, ok := r.turnStateEncryptor.(interface{ Decrypt(string) (string, error) })
+		if !ok {
+			return "", nil, errors.New("codex turn-state decryptor is not configured")
+		}
+		state, err = decryptor.Decrypt(ciphertext)
+		if err != nil {
+			return "", nil, fmt.Errorf("decrypt codex turn-state: %w", err)
+		}
 	}
 	if len([]byte(state)) != meta.Length {
 		return "", nil, errors.New("codex turn-state length mismatch")
@@ -152,15 +158,12 @@ func appendCodexTurnStateWhereCondition(conditions []string, args []any, filter 
 	return append(conditions, "EXISTS ("+subquery+")"), args
 }
 
-// CreateCodexTurnState encrypts and stores the turn-state sidecar associated
+// CreateCodexTurnState stores the plaintext turn-state sidecar associated
 // with a usage row. The lookup by request_id keeps this compatible with the
 // existing best-effort usage-log batch writer, which does not return IDs.
 func (r *usageLogRepository) CreateCodexTurnState(ctx context.Context, log *service.UsageLog) error {
 	if r == nil || log == nil || log.CodexTurnState == nil || strings.TrimSpace(log.CodexTurnState.Value) == "" {
 		return nil
-	}
-	if r.turnStateEncryptor == nil {
-		return errors.New("codex turn-state encryption is not configured")
 	}
 	if r.sql == nil {
 		return errors.New("codex turn-state database is not configured")
@@ -176,10 +179,6 @@ func (r *usageLogRepository) CreateCodexTurnState(ctx context.Context, log *serv
 			[]any{log.RequestID, log.APIKeyID}, &usageLogID); err != nil {
 			return fmt.Errorf("resolve usage log for codex turn-state: %w", err)
 		}
-	}
-	ciphertext, err := r.turnStateEncryptor.Encrypt(state)
-	if err != nil {
-		return fmt.Errorf("encrypt codex turn-state: %w", err)
 	}
 	digest := sha256.Sum256([]byte(state))
 	requestID := strings.TrimSpace(log.RequestID)
@@ -199,15 +198,16 @@ func (r *usageLogRepository) CreateCodexTurnState(ctx context.Context, log *serv
 	if transport == "" {
 		transport = "unknown"
 	}
+	var err error
 	_, err = r.sql.ExecContext(ctx, `
 		INSERT INTO codex_turn_states
 			(usage_log_id, account_id, api_key_id, request_id, upstream_request_id,
 			 session_id, model, transport, state_ciphertext, state_length,
-			 state_sha256, encryption_version)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 1)
+			 state_sha256, encryption_version, state_plaintext)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, $9, $10, 0, $11)
 		ON CONFLICT (usage_log_id) DO NOTHING
 	`, usageLogID, log.AccountID, log.APIKeyID, requestIDArg, upstreamRequestID,
-		sessionID, log.Model, transport, ciphertext, len([]byte(state)), hex.EncodeToString(digest[:]))
+		sessionID, log.Model, transport, len([]byte(state)), hex.EncodeToString(digest[:]), state)
 	if err != nil {
 		return fmt.Errorf("persist codex turn-state: %w", err)
 	}
