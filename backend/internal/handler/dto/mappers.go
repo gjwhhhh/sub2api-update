@@ -765,6 +765,8 @@ func UsageLogFromServiceAdmin(l *service.UsageLog) *AdminUsageLog {
 	usageLog := usageLogFromServiceUser(l)
 	usageLog.UpstreamEndpoint = l.UpstreamEndpoint
 	return &AdminUsageLog{
+		CodexTurnStatePresent:   l.CodexTurnStateMetadata != nil,
+		CodexTurnState:          l.CodexTurnStateMetadata,
 		UsageLog:                usageLog,
 		UpstreamModel:           l.UpstreamModel,
 		UpstreamReasoningEffort: adminUpstreamReasoningEffort(l),

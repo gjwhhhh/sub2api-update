@@ -3,13 +3,82 @@ package repository
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
+
+// Only metadata is selected here; the ciphertext never enters the read API.
+func (r *usageLogRepository) GetCodexTurnStateMetadata(ctx context.Context, usageLogID int64) (*service.CodexTurnStateMetadata, error) {
+	var meta service.CodexTurnStateMetadata
+	err := scanSingleRow(ctx, r.sql, `SELECT usage_log_id, state_length, state_sha256, transport, created_at
+		FROM codex_turn_states WHERE usage_log_id = $1`, []any{usageLogID},
+		&meta.UsageLogID, &meta.Length, &meta.SHA256, &meta.Transport, &meta.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &meta, nil
+}
+
+func (r *usageLogRepository) hydrateCodexTurnStateMetadata(ctx context.Context, logs []service.UsageLog) error {
+	if len(logs) == 0 {
+		return nil
+	}
+	placeholders := make([]string, len(logs))
+	args := make([]any, len(logs))
+	byID := make(map[int64]*service.UsageLog, len(logs))
+	for i := range logs {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+		args[i] = logs[i].ID
+		byID[logs[i].ID] = &logs[i]
+	}
+	rows, err := r.sql.QueryContext(ctx, `SELECT usage_log_id, state_length, state_sha256, transport, created_at
+		FROM codex_turn_states WHERE usage_log_id IN (`+strings.Join(placeholders, ",")+`)`, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var meta service.CodexTurnStateMetadata
+		if err := rows.Scan(&meta.UsageLogID, &meta.Length, &meta.SHA256, &meta.Transport, &meta.CreatedAt); err != nil {
+			return err
+		}
+		if log := byID[meta.UsageLogID]; log != nil {
+			log.CodexTurnStateMetadata = &meta
+		}
+	}
+	return rows.Err()
+}
+
+func appendCodexTurnStateWhereCondition(conditions []string, args []any, filter usagestats.CodexTurnStateFilter, alias string) ([]string, []any) {
+	if !filter.Active() {
+		return conditions, args
+	}
+	if alias == "" {
+		alias = "usage_logs"
+	}
+	subquery := "SELECT 1 FROM codex_turn_states cts WHERE cts.usage_log_id = " + alias + ".id"
+	if filter.Present != nil && !*filter.Present {
+		return append(conditions, "NOT EXISTS ("+subquery+")"), args
+	}
+	if filter.Length != nil {
+		subquery += fmt.Sprintf(" AND cts.state_length = $%d", len(args)+1)
+		args = append(args, *filter.Length)
+	}
+	if filter.Transport != "" {
+		subquery += fmt.Sprintf(" AND cts.transport = $%d", len(args)+1)
+		args = append(args, filter.Transport)
+	}
+	return append(conditions, "EXISTS ("+subquery+")"), args
+}
 
 // CreateCodexTurnState encrypts and stores the turn-state sidecar associated
 // with a usage row. The lookup by request_id keeps this compatible with the

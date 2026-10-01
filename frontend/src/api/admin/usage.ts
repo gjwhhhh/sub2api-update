@@ -85,6 +85,9 @@ export interface AdminUsageQueryParams extends UsageQueryParams {
   exact_total?: boolean
   billing_mode?: string
   upstream_model_mismatch?: boolean
+	codex_turn_state_present?: boolean
+	codex_turn_state_length?: number
+	codex_turn_state_transport?: 'http' | 'sse' | 'ws'
   sort_by?: string
   sort_order?: 'asc' | 'desc'
   // 错误请求 tab 专属筛选(仅传给错误列表接口;共用同一 filters 对象)
@@ -126,6 +129,9 @@ export async function getStats(params: {
   stream?: boolean
   native_compaction_v2?: boolean | null
   upstream_model_mismatch?: boolean
+  codex_turn_state_present?: boolean
+  codex_turn_state_length?: number
+  codex_turn_state_transport?: 'http' | 'sse' | 'ws'
   period?: string
   start_date?: string
   end_date?: string

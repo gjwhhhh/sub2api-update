@@ -269,12 +269,13 @@ type PlatformDashboardStats struct {
 
 // UsageLogFilters represents filters for usage log queries
 type UsageLogFilters struct {
-	UserID    int64
-	APIKeyID  int64
-	AccountID int64
-	GroupID   int64
-	RequestID string
-	Model     string
+	CodexTurnState CodexTurnStateFilter
+	UserID         int64
+	APIKeyID       int64
+	AccountID      int64
+	GroupID        int64
+	RequestID      string
+	Model          string
 	// ModelFilterSource controls how Model is matched. Empty preserves raw usage_logs.model semantics.
 	ModelFilterSource     string
 	RequestType           *int16
@@ -287,6 +288,16 @@ type UsageLogFilters struct {
 	EndTime               *time.Time
 	// ExactTotal requests exact COUNT(*) for pagination. Default false for fast large-table paging.
 	ExactTotal bool
+}
+
+type CodexTurnStateFilter struct {
+	Present   *bool  `json:"present,omitempty"`
+	Length    *int   `json:"length,omitempty"`
+	Transport string `json:"transport,omitempty"`
+}
+
+func (f CodexTurnStateFilter) Active() bool {
+	return f.Present != nil || f.Length != nil || f.Transport != ""
 }
 
 // UsageStats represents usage statistics

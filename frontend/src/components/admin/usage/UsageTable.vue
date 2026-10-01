@@ -145,6 +145,18 @@
           </span>
         </template>
 
+        <template #cell-codex_turn_state="{ row }">
+          <div v-if="row.codex_turn_state_present && row.codex_turn_state" class="space-y-0.5 text-xs">
+            <div class="font-medium text-emerald-600 dark:text-emerald-400">
+              {{ row.codex_turn_state.length }} B · {{ row.codex_turn_state.transport.toUpperCase() }}
+            </div>
+            <div class="max-w-[180px] truncate font-mono text-[10px] text-gray-500 dark:text-gray-400" :title="row.codex_turn_state.sha256">
+              {{ row.codex_turn_state.sha256 }}
+            </div>
+          </div>
+          <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+        </template>
+
         <template #cell-tokens="{ row }">
           <!-- 图片生成请求（仅按次计费时显示图片格式） -->
           <div v-if="isImageUsage(row)" class="flex items-center gap-1.5">

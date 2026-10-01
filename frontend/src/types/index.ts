@@ -1809,7 +1809,15 @@ export interface UsageLogAccountSummary {
 }
 
 export interface AdminUsageLog extends UsageLog {
-  upstream_model?: string | null
+	codex_turn_state_present?: boolean
+	codex_turn_state?: {
+		usage_log_id: number
+		length: number
+		sha256: string
+		transport: string
+		created_at: string
+	} | null
+	upstream_model?: string | null
   upstream_reasoning_effort?: string | null
   upstream_response_model?: string | null
   upstream_model_mismatch?: boolean | null

@@ -121,6 +121,33 @@ func TestAdminUsageListInvalidNativeCompactionFilter(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
+func TestAdminUsageListCodexTurnStateFilters(t *testing.T) {
+	repo := &adminUsageRepoCapture{}
+	router := newAdminUsageRequestTypeTestRouter(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/usage?codex_turn_state_present=true&codex_turn_state_length=312&codex_turn_state_transport=sse", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.NotNil(t, repo.listFilters.CodexTurnState.Present)
+	require.True(t, *repo.listFilters.CodexTurnState.Present)
+	require.NotNil(t, repo.listFilters.CodexTurnState.Length)
+	require.Equal(t, 312, *repo.listFilters.CodexTurnState.Length)
+	require.Equal(t, "sse", repo.listFilters.CodexTurnState.Transport)
+}
+
+func TestAdminUsageListRejectsInvalidCodexTurnStateFilter(t *testing.T) {
+	repo := &adminUsageRepoCapture{}
+	router := newAdminUsageRequestTypeTestRouter(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/usage?codex_turn_state_transport=grpc", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
 func TestAdminUsageListExactTotalTrue(t *testing.T) {
 	repo := &adminUsageRepoCapture{}
 	router := newAdminUsageRequestTypeTestRouter(repo)

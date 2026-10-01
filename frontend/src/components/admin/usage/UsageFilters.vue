@@ -150,6 +150,21 @@
           <Select v-model="filters.upstream_model_mismatch" :options="upstreamModelMismatchOptions" @change="emitChange" />
         </div>
 
+        <div v-if="mode === 'usage'" class="w-full sm:w-auto sm:min-w-[200px]">
+          <label class="input-label">{{ t('admin.usage.codexTurnState') }}</label>
+          <Select v-model="filters.codex_turn_state_present" :options="codexTurnStateOptions" @change="handleCodexTurnStatePresentChange" />
+        </div>
+
+        <div v-if="mode === 'usage'" class="w-full sm:w-auto sm:min-w-[180px]">
+          <label class="input-label">{{ t('admin.usage.codexTurnStateLength') }}</label>
+          <Select v-model="filters.codex_turn_state_length" :options="codexTurnStateLengthOptions" @change="emitChange" />
+        </div>
+
+        <div v-if="mode === 'usage'" class="w-full sm:w-auto sm:min-w-[180px]">
+          <label class="input-label">{{ t('admin.usage.codexTurnStateTransport') }}</label>
+          <Select v-model="filters.codex_turn_state_transport" :options="codexTurnStateTransportOptions" @change="emitChange" />
+        </div>
+
         <!-- Error Phase Filter (errors only) -->
         <div v-if="mode === 'errors'" class="w-full sm:w-auto sm:min-w-[180px]">
           <label class="input-label">{{ t('admin.ops.errorLog.type') }}</label>
@@ -328,6 +343,31 @@ const upstreamModelMismatchOptions = ref<SelectOption[]>([
   { value: true, label: t('admin.usage.upstreamModelMismatchOnly') },
   { value: false, label: t('admin.usage.upstreamModelMatchedOnly') }
 ])
+
+const codexTurnStateOptions = ref<SelectOption[]>([
+  { value: null, label: t('admin.usage.allCodexTurnStates') },
+  { value: true, label: t('admin.usage.codexTurnStatePresentOnly') },
+  { value: false, label: t('admin.usage.codexTurnStateMissingOnly') },
+])
+const codexTurnStateLengthOptions = ref<SelectOption[]>([
+  { value: null, label: t('admin.usage.allCodexTurnStateLengths') },
+  { value: 292, label: '292' },
+  { value: 312, label: '312' },
+])
+const codexTurnStateTransportOptions = ref<SelectOption[]>([
+  { value: null, label: t('admin.usage.allCodexTurnStateTransports') },
+  { value: 'http', label: 'HTTP' },
+  { value: 'sse', label: 'SSE' },
+  { value: 'ws', label: 'WebSocket' },
+])
+
+const handleCodexTurnStatePresentChange = () => {
+  if (filters.value.codex_turn_state_present === false) {
+    filters.value.codex_turn_state_length = undefined
+    filters.value.codex_turn_state_transport = undefined
+  }
+  emitChange()
+}
 
 const emitChange = () => emit('change')
 

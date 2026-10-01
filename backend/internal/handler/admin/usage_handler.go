@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -112,6 +113,11 @@ func (h *UsageHandler) List(c *gin.Context) {
 	model := c.Query("model")
 	requestID := strings.TrimSpace(c.Query("request_id"))
 	billingMode := strings.TrimSpace(c.Query("billing_mode"))
+	codexTurnState, err := parseCodexTurnStateFilter(c)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 
 	var requestType *int16
 	var stream *bool
@@ -205,6 +211,7 @@ func (h *UsageHandler) List(c *gin.Context) {
 		StartTime:             startTime,
 		EndTime:               endTime,
 		ExactTotal:            exactTotal,
+		CodexTurnState:        codexTurnState,
 	}
 
 	records, result, err := h.usageService.ListWithFilters(c.Request.Context(), params, filters)
@@ -218,6 +225,32 @@ func (h *UsageHandler) List(c *gin.Context) {
 		out = append(out, *dto.UsageLogFromServiceAdmin(&records[i]))
 	}
 	response.Paginated(c, out, result.Total, page, pageSize)
+}
+
+func parseCodexTurnStateFilter(c *gin.Context) (usagestats.CodexTurnStateFilter, error) {
+	var filter usagestats.CodexTurnStateFilter
+	if raw := strings.TrimSpace(c.Query("codex_turn_state_present")); raw != "" {
+		value, err := strconv.ParseBool(raw)
+		if err != nil {
+			return filter, errors.New("Invalid codex_turn_state_present value, use true or false")
+		}
+		filter.Present = &value
+	}
+	if raw := strings.TrimSpace(c.Query("codex_turn_state_length")); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil || value <= 0 {
+			return filter, errors.New("Invalid codex_turn_state_length value")
+		}
+		filter.Length = &value
+	}
+	filter.Transport = strings.TrimSpace(c.Query("codex_turn_state_transport"))
+	if filter.Present != nil && !*filter.Present && (filter.Length != nil || filter.Transport != "") {
+		return filter, errors.New("codex_turn_state_present=false cannot be combined with length or transport")
+	}
+	if filter.Transport != "" && filter.Transport != "http" && filter.Transport != "sse" && filter.Transport != "ws" {
+		return filter, errors.New("Invalid codex_turn_state_transport value")
+	}
+	return filter, nil
 }
 
 // Stats handles getting usage statistics with filters
@@ -309,6 +342,11 @@ func (h *UsageHandler) Stats(c *gin.Context) {
 		}
 		upstreamModelMismatch = &value
 	}
+	codexTurnState, err := parseCodexTurnStateFilter(c)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 
 	// Parse date range
 	userTZ := c.Query("timezone")
@@ -361,6 +399,7 @@ func (h *UsageHandler) Stats(c *gin.Context) {
 		BillingType:           billingType,
 		BillingMode:           billingMode,
 		UpstreamModelMismatch: upstreamModelMismatch,
+		CodexTurnState:        codexTurnState,
 		StartTime:             &startTime,
 		EndTime:               &endTime,
 	}
