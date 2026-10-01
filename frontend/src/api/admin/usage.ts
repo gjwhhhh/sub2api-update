@@ -96,6 +96,24 @@ export interface AdminUsageQueryParams extends UsageQueryParams {
   status_code?: number | null
 }
 
+export interface CodexTurnStateMetadata {
+  usage_log_id: number
+  length: number
+  sha256: string
+  transport: string
+  created_at: string
+}
+
+export async function getCodexTurnStateMetadata(id: number): Promise<CodexTurnStateMetadata> {
+  const { data } = await apiClient.get<CodexTurnStateMetadata>(`/admin/usage/${id}/codex-turn-state`)
+  return data
+}
+
+export async function revealCodexTurnState(id: number): Promise<{ usage_log_id: number; state: string; metadata: CodexTurnStateMetadata }> {
+  const { data } = await apiClient.post(`/admin/usage/${id}/codex-turn-state/reveal`)
+  return data
+}
+
 // ==================== API Functions ====================
 
 /**

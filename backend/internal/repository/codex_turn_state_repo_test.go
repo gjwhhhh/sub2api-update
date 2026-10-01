@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -64,5 +65,23 @@ func TestCreateCodexTurnStateSkipsEmptySnapshot(t *testing.T) {
 	t.Cleanup(func() { _ = db.Close() })
 	repo := newUsageLogRepositoryWithSQLAndEncryptor(nil, db, codexTurnStateTestEncryptor{})
 	require.NoError(t, repo.CreateCodexTurnState(context.Background(), &service.UsageLog{}))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestRevealCodexTurnStateDecryptsAndReturnsMetadata(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	created := time.Date(2026, 10, 1, 1, 2, 3, 0, time.UTC)
+	mock.ExpectQuery("SELECT usage_log_id, state_ciphertext, state_length").
+		WithArgs(int64(77)).
+		WillReturnRows(sqlmock.NewRows([]string{"usage_log_id", "state_ciphertext", "state_length", "state_sha256", "transport", "created_at"}).
+			AddRow(int64(77), "cipher:turn-state-value", 23, "digest", "sse", created))
+	repo := newUsageLogRepositoryWithSQLAndEncryptor(nil, db, codexTurnStateTestEncryptor{})
+	state, meta, err := repo.RevealCodexTurnState(context.Background(), 77)
+	require.NoError(t, err)
+	require.Equal(t, "cipher:turn-state-value", state)
+	require.Equal(t, int64(77), meta.UsageLogID)
+	require.Equal(t, 23, meta.Length)
 	require.NoError(t, mock.ExpectationsWereMet())
 }

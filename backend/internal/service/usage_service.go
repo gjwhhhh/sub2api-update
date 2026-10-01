@@ -13,7 +13,8 @@ import (
 )
 
 var (
-	ErrUsageLogNotFound = infraerrors.NotFound("USAGE_LOG_NOT_FOUND", "usage log not found")
+	ErrUsageLogNotFound          = infraerrors.NotFound("USAGE_LOG_NOT_FOUND", "usage log not found")
+	ErrCodexTurnStateUnavailable = infraerrors.NotFound("CODEX_TURN_STATE_NOT_FOUND", "codex turn state not found")
 )
 
 // CreateUsageLogRequest 创建使用日志请求
@@ -155,6 +156,36 @@ func (s *UsageService) GetByID(ctx context.Context, id int64) (*UsageLog, error)
 		return nil, fmt.Errorf("get usage log: %w", err)
 	}
 	return log, nil
+}
+
+func (s *UsageService) GetCodexTurnStateMetadata(ctx context.Context, id int64) (*CodexTurnStateMetadata, error) {
+	reader, ok := s.usageRepo.(CodexTurnStateMetadataReader)
+	if !ok {
+		return nil, ErrCodexTurnStateUnavailable
+	}
+	meta, err := reader.GetCodexTurnStateMetadata(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("get codex turn state metadata: %w", err)
+	}
+	if meta == nil {
+		return nil, ErrCodexTurnStateUnavailable
+	}
+	return meta, nil
+}
+
+func (s *UsageService) RevealCodexTurnState(ctx context.Context, id int64) (string, *CodexTurnStateMetadata, error) {
+	revealer, ok := s.usageRepo.(CodexTurnStateRevealer)
+	if !ok {
+		return "", nil, ErrCodexTurnStateUnavailable
+	}
+	state, meta, err := revealer.RevealCodexTurnState(ctx, id)
+	if err != nil {
+		return "", nil, fmt.Errorf("reveal codex turn state: %w", err)
+	}
+	if meta == nil {
+		return "", nil, ErrCodexTurnStateUnavailable
+	}
+	return state, meta, nil
 }
 
 // ListByUser 获取用户的使用日志列表

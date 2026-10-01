@@ -99,8 +99,15 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	userHandler := handler.NewUserHandler(userService, authService, emailService, emailCache, affiliateService, serviceUserPlatformQuotaRepository)
 	apiKeyHandler := handler.NewAPIKeyHandler(apiKeyService)
 	var usageLogTurnStateEncryptor service.SecretEncryptor
-	if configConfig.Totp.EncryptionKeyConfigured {
+	if configConfig.CodexTurnState.EncryptionKeyConfigured {
+		usageLogTurnStateEncryptor, err = repository.NewAESEncryptorFromHexKey(configConfig.CodexTurnState.EncryptionKey, "codex turn-state")
+		if err != nil {
+			return nil, err
+		}
+	} else if configConfig.Totp.EncryptionKeyConfigured {
+		// Compatibility fallback for deployments that predate the dedicated key.
 		usageLogTurnStateEncryptor = secretEncryptor
+		log.Println("WARNING: codex turn-state encryption key is not configured; falling back to TOTP key")
 	}
 	usageLogRepository := repository.NewUsageLogRepository(client, db, usageLogTurnStateEncryptor)
 	usageService := service.NewUsageService(usageLogRepository, userRepository, client, apiKeyAuthCacheInvalidator)
@@ -256,6 +263,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	usageCleanupRepository := repository.NewUsageCleanupRepository(client, db)
 	usageCleanupService := service.ProvideUsageCleanupService(usageCleanupRepository, timingWheelService, dashboardAggregationService, configConfig)
 	adminUsageHandler := admin.NewUsageHandler(usageService, apiKeyService, adminService, usageCleanupService)
+	adminUsageHandler.SetCodexTurnStateRevealDependencies(totpService, userService)
 	userAttributeHandler := admin.NewUserAttributeHandler(userAttributeService)
 	errorPassthroughRepository := repository.NewErrorPassthroughRepository(client)
 	errorPassthroughCache := repository.NewErrorPassthroughCache(redisClient)

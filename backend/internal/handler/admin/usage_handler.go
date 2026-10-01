@@ -26,6 +26,8 @@ type UsageHandler struct {
 	apiKeyService  *service.APIKeyService
 	adminService   service.AdminService
 	cleanupService *service.UsageCleanupService
+	totpService    *service.TotpService
+	userService    *service.UserService
 }
 
 // NewUsageHandler creates a new admin usage handler
@@ -41,6 +43,43 @@ func NewUsageHandler(
 		adminService:   adminService,
 		cleanupService: cleanupService,
 	}
+}
+
+func (h *UsageHandler) SetCodexTurnStateRevealDependencies(totp *service.TotpService, users *service.UserService) {
+	h.totpService, h.userService = totp, users
+}
+
+func (h *UsageHandler) CodexTurnStateMetadata(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		response.BadRequest(c, "Invalid usage log id")
+		return
+	}
+	meta, err := h.usageService.GetCodexTurnStateMetadata(c.Request.Context(), id)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, meta)
+}
+
+func (h *UsageHandler) RevealCodexTurnState(c *gin.Context) {
+	if h.totpService == nil || h.userService == nil || !middleware.EnforceStepUpAlways(c, h.totpService, h.userService) {
+		return
+	}
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		response.BadRequest(c, "Invalid usage log id")
+		return
+	}
+	state, meta, err := h.usageService.RevealCodexTurnState(c.Request.Context(), id)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	middleware.SetAuditAction(c, service.AuditActionCodexTurnStateReveal)
+	middleware.SetAuditExtra(c, map[string]any{"usage_log_id": id, "state_length": meta.Length, "transport": meta.Transport})
+	response.Success(c, gin.H{"usage_log_id": id, "state": state, "metadata": meta})
 }
 
 // CreateUsageCleanupTaskRequest represents cleanup task creation request

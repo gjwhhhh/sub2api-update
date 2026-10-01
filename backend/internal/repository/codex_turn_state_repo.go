@@ -28,6 +28,33 @@ func (r *usageLogRepository) GetCodexTurnStateMetadata(ctx context.Context, usag
 	return &meta, nil
 }
 
+func (r *usageLogRepository) RevealCodexTurnState(ctx context.Context, usageLogID int64) (string, *service.CodexTurnStateMetadata, error) {
+	if r == nil || r.sql == nil || r.turnStateEncryptor == nil {
+		return "", nil, errors.New("codex turn-state encryption is not configured")
+	}
+	decryptor, ok := r.turnStateEncryptor.(interface{ Decrypt(string) (string, error) })
+	if !ok {
+		return "", nil, errors.New("codex turn-state decryptor is not configured")
+	}
+	var ciphertext string
+	var meta service.CodexTurnStateMetadata
+	err := scanSingleRow(ctx, r.sql, `SELECT usage_log_id, state_ciphertext, state_length, state_sha256, transport, created_at FROM codex_turn_states WHERE usage_log_id = $1`, []any{usageLogID}, &meta.UsageLogID, &ciphertext, &meta.Length, &meta.SHA256, &meta.Transport, &meta.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil, nil
+	}
+	if err != nil {
+		return "", nil, err
+	}
+	state, err := decryptor.Decrypt(ciphertext)
+	if err != nil {
+		return "", nil, fmt.Errorf("decrypt codex turn-state: %w", err)
+	}
+	if len([]byte(state)) != meta.Length {
+		return "", nil, errors.New("codex turn-state length mismatch")
+	}
+	return state, &meta, nil
+}
+
 func (r *usageLogRepository) hydrateCodexTurnStateMetadata(ctx context.Context, logs []service.UsageLog) error {
 	if len(logs) == 0 {
 		return nil

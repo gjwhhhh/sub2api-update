@@ -88,6 +88,14 @@ type CodexTurnStateWriter interface {
 	CreateCodexTurnState(ctx context.Context, log *UsageLog) error
 }
 
+type CodexTurnStateMetadataReader interface {
+	GetCodexTurnStateMetadata(ctx context.Context, usageLogID int64) (*CodexTurnStateMetadata, error)
+}
+
+type CodexTurnStateRevealer interface {
+	RevealCodexTurnState(ctx context.Context, usageLogID int64) (string, *CodexTurnStateMetadata, error)
+}
+
 type accountWindowStatsBatchReader interface {
 	GetAccountWindowStatsBatch(ctx context.Context, accountIDs []int64, startTime time.Time) (map[int64]*usagestats.AccountStats, error)
 }

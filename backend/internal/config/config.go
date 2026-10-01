@@ -77,6 +77,7 @@ type Config struct {
 	Ops                     OpsConfig                     `mapstructure:"ops"`
 	JWT                     JWTConfig                     `mapstructure:"jwt"`
 	Totp                    TotpConfig                    `mapstructure:"totp"`
+	CodexTurnState          CodexTurnStateConfig          `mapstructure:"codex_turn_state"`
 	WebAuthn                WebAuthnConfig                `mapstructure:"webauthn"`
 	LinuxDo                 LinuxDoConnectConfig          `mapstructure:"linuxdo_connect"`
 	WeChat                  WeChatConnectConfig           `mapstructure:"wechat_connect"`
@@ -1690,6 +1691,11 @@ type TotpConfig struct {
 	EncryptionKeyConfigured bool `mapstructure:"-"`
 }
 
+type CodexTurnStateConfig struct {
+	EncryptionKey           string `mapstructure:"encryption_key"`
+	EncryptionKeyConfigured bool   `mapstructure:"-"`
+}
+
 type TurnstileConfig struct {
 	Required bool `mapstructure:"required"`
 }
@@ -1980,6 +1986,8 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	} else {
 		cfg.Totp.EncryptionKeyConfigured = true
 	}
+	cfg.CodexTurnState.EncryptionKey = strings.TrimSpace(cfg.CodexTurnState.EncryptionKey)
+	cfg.CodexTurnState.EncryptionKeyConfigured = cfg.CodexTurnState.EncryptionKey != ""
 
 	originalJWTSecret := cfg.JWT.Secret
 	if allowMissingJWTSecret && originalJWTSecret == "" {
@@ -2323,6 +2331,7 @@ func setDefaults() {
 
 	// TOTP
 	viper.SetDefault("totp.encryption_key", "")
+	viper.SetDefault("codex_turn_state.encryption_key", "")
 
 	// Default
 	// Admin credentials are created via the setup flow (web wizard / CLI / AUTO_SETUP).
