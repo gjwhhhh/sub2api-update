@@ -99,15 +99,8 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	userHandler := handler.NewUserHandler(userService, authService, emailService, emailCache, affiliateService, serviceUserPlatformQuotaRepository)
 	apiKeyHandler := handler.NewAPIKeyHandler(apiKeyService)
 	var usageLogTurnStateEncryptor service.SecretEncryptor
-	if configConfig.CodexTurnState.EncryptionKeyConfigured {
-		usageLogTurnStateEncryptor, err = repository.NewAESEncryptorFromHexKey(configConfig.CodexTurnState.EncryptionKey, "codex turn-state")
-		if err != nil {
-			return nil, err
-		}
-	} else if configConfig.Totp.EncryptionKeyConfigured {
-		// Compatibility fallback for deployments that predate the dedicated key.
+	if configConfig.Totp.EncryptionKeyConfigured {
 		usageLogTurnStateEncryptor = secretEncryptor
-		log.Println("WARNING: codex turn-state encryption key is not configured; falling back to TOTP key")
 	}
 	usageLogRepository := repository.NewUsageLogRepository(client, db, usageLogTurnStateEncryptor)
 	usageService := service.NewUsageService(usageLogRepository, userRepository, client, apiKeyAuthCacheInvalidator)
