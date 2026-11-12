@@ -27,7 +27,7 @@ func SendInspectionNotification(ctx context.Context, s InspectionSettings, title
 		if err != nil {
 			return fmt.Errorf("%s: notification request failed", channel)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			return fmt.Errorf("%s: HTTP %d", channel, resp.StatusCode)
 		}

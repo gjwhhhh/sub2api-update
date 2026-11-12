@@ -13,6 +13,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
+	"github.com/Wei-Shaw/sub2api/internal/handler/admin"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/securityaudit"
@@ -25,6 +26,7 @@ import (
 )
 
 type Application struct {
+	Evaluation    *admin.EvaluationModule
 	Server        *http.Server
 	PromptAudit   *securityaudit.PromptService
 	PluginManager *service.PluginManager
@@ -57,8 +59,10 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 		// Cleanup function provider
 		provideCleanup,
 
+		provideEvaluationModule,
+
 		// Application struct
-		wire.Struct(new(Application), "Server", "PromptAudit", "PluginManager", "Cleanup"),
+		wire.Struct(new(Application), "Server", "PromptAudit", "PluginManager", "Evaluation", "Cleanup"),
 	)
 	return nil, nil
 }

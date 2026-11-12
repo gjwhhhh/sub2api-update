@@ -65,15 +65,16 @@ func (r *codexInspectionSettingsRepo) SetMultiple(_ context.Context, values map[
 func TestCodexInspectionSettingsLoadFailureBlocksStartUntilSaved(t *testing.T) {
 	repo := &codexInspectionSettingsRepo{values: map[string]string{}, readFail: true}
 	settings := &SettingService{settingRepo: repo}
-	codexeval.InitializeInspection(codexeval.InspectionHooks{
+	engine := codexeval.New("", nil, nil)
+	engine.InitializeInspection(codexeval.InspectionHooks{
 		Load: settings.GetCodexInspectionSettings,
 		List: func(context.Context, codexeval.InspectionSettings) ([]codexeval.InspectionAccount, error) {
 			return []codexeval.InspectionAccount{}, nil
 		},
 	})
-	defer codexeval.StopInspection()
-	defer codexeval.CancelInspection()
-	if err := codexeval.StartInspection(); err == nil {
+	defer engine.StopInspection()
+	defer engine.CancelInspection()
+	if err := engine.StartInspection(); err == nil {
 		t.Fatal("inspection started before saved settings loaded")
 	}
 	repo.readFail = false
@@ -82,14 +83,15 @@ func TestCodexInspectionSettingsLoadFailureBlocksStartUntilSaved(t *testing.T) {
 	if _, err := settings.UpdateCodexInspectionSettings(context.Background(), next); err != nil {
 		t.Fatal(err)
 	}
-	if err := codexeval.StartInspection(); err != nil {
+	engine.UpdateInspectionSettings(next)
+	if err := engine.StartInspection(); err != nil {
 		t.Fatalf("inspection did not start after settings were saved: %v", err)
 	}
 	deadline := time.Now().Add(time.Second)
-	for codexeval.CurrentInspectionState().Running && time.Now().Before(deadline) {
+	for engine.CurrentInspectionState().Running && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
 	}
-	if state := codexeval.CurrentInspectionState(); state.Running || state.Phase != "completed" {
+	if state := engine.CurrentInspectionState(); state.Running || state.Phase != "completed" {
 		t.Fatalf("inspection did not complete: %+v", state)
 	}
 }

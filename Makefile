@@ -56,3 +56,4 @@ test-frontend:
 
 test-frontend-critical:
 	@pnpm --dir frontend exec vitest run $(FRONTEND_CRITICAL_VITEST)
+	@node frontend/src/__tests__/codex-eval.ui.cjs

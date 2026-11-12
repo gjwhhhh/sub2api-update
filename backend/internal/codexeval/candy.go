@@ -7,11 +7,6 @@ import (
 
 const candyMaxRuns = 10
 
-var (
-	candyResults = map[string][]candyResult{}
-	candyRunning = map[string]*candyProgress{}
-)
-
 const candyPrompt = `不使用任何外部工具回答以下问题：
 
 在一个黑色的袋子里放有三种口味的糖果，每种糖果有两种不同的形状（圆形和五角星形，不同的形状靠手感可以分辨）。现已知不同口味的糖和不同形状的数量统计如下表。参赛者需要在活动前决定摸出的糖果数目，那么，最少取出多少个糖果才能保证手中同时拥有不同形状的苹果味和桃子味的糖？（同时手中有圆形苹果味匹配五角星桃子味糖果，或者有圆形桃子味匹配五角星苹果味糖果都满足要求）
@@ -44,47 +39,38 @@ type candyProgress struct {
 }
 
 // Each credential runs serially; different credentials run in parallel.
-func runCandy(auth credential, model, effort string, runs int) {
-	runCandyChecked(auth, model, effort, runs, nil)
-}
-
-func runCandyChecked(auth credential, model, effort string, runs int, check func() error) {
+func (engine *Engine) runCandyChecked(auth credential, model, effort string, runs int, check func() error) {
 	id := auth.ID
 	defer func() {
-		mu.Lock()
-		delete(candyRunning, id)
-		mu.Unlock()
+		engine.mu.Lock()
+		delete(engine.candyRunning, id)
+		engine.mu.Unlock()
 	}()
 	for range runs {
-		mu.Lock()
+		engine.mu.Lock()
 		stopping := auth.ctx.Err() != nil
-		mu.Unlock()
+		engine.mu.Unlock()
 		if stopping {
 			return
 		}
-		r, save := evaluateCandyChecked(auth, model, effort, check)
+		r, save := engine.evaluateCandyChecked(auth, model, effort, check)
 		if !save {
 			return
 		}
-		mu.Lock()
-		candyResults[id] = appendRecent(candyResults[id], r)
-		candyRunning[id].Done++
-		_ = saveStateLocked()
-		mu.Unlock()
+		engine.mu.Lock()
+		engine.candyResults[id] = appendRecent(engine.candyResults[id], r)
+		engine.candyRunning[id].Done++
+		_ = engine.saveStateLocked()
+		engine.mu.Unlock()
 	}
-}
-
-func evaluateCandy(auth credential, model, effort string) candyResult {
-	r, _ := evaluateCandyChecked(auth, model, effort, nil)
-	return r
 }
 
 var errInspectionStopped = errors.New("inspection disabled")
 
-func evaluateCandyChecked(auth credential, model, effort string, check func() error) (candyResult, bool) {
+func (engine *Engine) evaluateCandyChecked(auth credential, model, effort string, check func() error) (candyResult, bool) {
 	r := candyResult{Info: auth.info(), Status: "completed", Time: time.Now().UTC(), Model: model, Effort: effort}
 	started := time.Now()
-	out, attempts, err := askCodex(auth.ctx, auth, model, effort, "", candyPrompt, answerTimeout, nil, check)
+	out, attempts, err := engine.askCodex(auth.ctx, auth, model, effort, "", candyPrompt, answerTimeout, nil, check)
 	if errors.Is(err, errInspectionStopped) {
 		return r, false
 	}

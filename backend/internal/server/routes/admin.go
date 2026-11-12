@@ -47,15 +47,7 @@ func RegisterAdminRoutes(
 
 		// 账号管理
 		registerAccountRoutes(admin, h, stepUpAuth)
-		eval := admin.Group("/codex-eval")
-		eval.GET("/state", h.Admin.Account.CodexEvalState)
-		eval.POST("/start", h.Admin.Account.CodexEvalStart)
-		eval.POST("/cancel", h.Admin.Account.CodexEvalCancel)
-		eval.GET("/records/:type/:account_id/:record_id", h.Admin.Account.CodexEvalRecord)
-		eval.POST("/clear-history", h.Admin.Account.CodexEvalClear)
-		eval.GET("/inspection/state", h.Admin.Account.CodexInspectionState)
-		eval.POST("/inspection/start", h.Admin.Account.CodexInspectionStart)
-		eval.POST("/inspection/stop", h.Admin.Account.CodexInspectionStop)
+		registerEvaluationRoutes(admin, h, stepUpAuth)
 
 		// 公告管理
 		registerAnnouncementRoutes(admin, h)
@@ -588,7 +580,7 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpA
 		adminSettings.GET("", h.Admin.Setting.GetSettings)
 		adminSettings.PUT("", h.Admin.Setting.UpdateSettings)
 		adminSettings.GET("/codex-eval-inspection", h.Admin.Setting.GetCodexInspectionSettings)
-		adminSettings.PUT("/codex-eval-inspection", h.Admin.Setting.UpdateCodexInspectionSettings)
+		adminSettings.PUT("/codex-eval-inspection", gin.HandlerFunc(stepUpAuth), h.Admin.Setting.UpdateCodexInspectionSettings)
 		adminSettings.POST("/test-smtp", h.Admin.Setting.TestSMTPConnection)
 		adminSettings.POST("/send-test-email", h.Admin.Setting.SendTestEmail)
 		adminSettings.GET("/email-templates", h.Admin.Setting.ListEmailTemplates)

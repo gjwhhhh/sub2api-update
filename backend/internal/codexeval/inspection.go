@@ -21,8 +21,8 @@ const (
 type InspectionAccount struct {
 	Target
 	Name                  string
-	Email                 string            `json:"email,omitempty"`
-	Platform              string            `json:"platform,omitempty"`
+	Email                 string `json:"email,omitempty"`
+	Platform              string `json:"platform,omitempty"`
 	Priority              int
 	Verdict               InspectionVerdict
 	Available             bool
@@ -69,6 +69,7 @@ type InspectionState struct {
 }
 
 type inspector struct {
+	engine         *Engine
 	mu             sync.Mutex
 	settings       InspectionSettings
 	settingsLoaded bool
@@ -85,51 +86,64 @@ type inspector struct {
 	phaseLimit     time.Duration
 }
 
-var inspection *inspector
-
-func InitializeInspection(hooks InspectionHooks) {
-	i := newInspector(hooks)
+func (engine *Engine) InitializeInspection(hooks InspectionHooks) {
+	engine.mu.Lock()
+	if engine.inspection != nil || engine.stopped {
+		engine.mu.Unlock()
+		return
+	}
+	i := engine.newInspector(hooks)
+	engine.inspection = i
+	engine.mu.Unlock()
 	i.loadInitialSettings()
-	inspection = i
 	go i.loop()
 }
 
-func newInspector(hooks InspectionHooks) *inspector {
+func (engine *Engine) newInspector(hooks InspectionHooks) *inspector {
 	ctx, cancel := context.WithCancel(context.Background())
-	i := &inspector{hooks: hooks, settings: DefaultInspectionSettings(), ctx: ctx, cancel: cancel,
+	i := &inspector{engine: engine, hooks: hooks, settings: DefaultInspectionSettings(), ctx: ctx, cancel: cancel,
 		wake: make(chan struct{}, 1), done: make(chan struct{}), poll: 15 * time.Second, recovery: 240 * time.Second, phaseLimit: 30 * time.Minute}
 	i.state = InspectionState{Phase: "idle", Results: []InspectionResult{}}
 	return i
 }
 
-func StopInspection() {
-	if inspection == nil {
+func (engine *Engine) StopInspection() {
+	i := engine.getInspector()
+	if i == nil {
 		return
 	}
-	inspection.cancel()
-	<-inspection.done
+	i.cancel()
+	<-i.done
 }
 
-func UpdateInspectionSettings(s InspectionSettings) {
-	if inspection != nil {
-		inspection.configure(s)
+func (engine *Engine) getInspector() *inspector {
+	engine.mu.Lock()
+	defer engine.mu.Unlock()
+	return engine.inspection
+}
+
+func (engine *Engine) UpdateInspectionSettings(s InspectionSettings) {
+	if i := engine.getInspector(); i != nil {
+		i.configure(s)
 	}
 }
-func CurrentInspectionState() InspectionState {
-	if inspection == nil {
+func (engine *Engine) CurrentInspectionState() InspectionState {
+	i := engine.getInspector()
+	if i == nil {
 		return InspectionState{Phase: "idle", Results: []InspectionResult{}}
 	}
-	return inspection.snapshot()
+	return i.snapshot()
 }
-func StartInspection() error {
-	if inspection == nil {
+func (engine *Engine) StartInspection() error {
+	i := engine.getInspector()
+	if i == nil {
 		return fmt.Errorf("巡检尚未初始化")
 	}
-	return inspection.start()
+	return i.start()
 }
-func CancelInspection() {
-	if inspection != nil {
-		inspection.stop()
+func (engine *Engine) CancelInspection() {
+	if i := engine.getInspector(); i != nil {
+		i.stop()
 	}
 }
 
@@ -140,6 +154,10 @@ func (i *inspector) signal() {
 	}
 }
 func (i *inspector) loadInitialSettings() {
+	if i.hooks.Load == nil {
+		i.configure(DefaultInspectionSettings())
+		return
+	}
 	s, err := i.hooks.Load(i.ctx)
 	if err != nil {
 		i.mu.Lock()
@@ -437,9 +455,9 @@ func (i *inspector) run(ctx context.Context, s InspectionSettings, done chan str
 		if !inspectionEligible(a, s) {
 			continue
 		}
-		mu.Lock()
-		busy := active[strconv.FormatInt(a.AccountID, 10)] != nil
-		mu.Unlock()
+		i.engine.mu.Lock()
+		busy := i.engine.active[strconv.FormatInt(a.AccountID, 10)] != nil
+		i.engine.mu.Unlock()
 		if busy {
 			continue
 		}
@@ -598,9 +616,9 @@ func (i *inspector) applyAccount(ctx context.Context, s InspectionSettings, n in
 	if !inspectionEligible(current, s) || current.Priority != baseline {
 		err = fmt.Errorf("账户状态或优先级已改变")
 	}
-	mu.Lock()
-	busy := active[strconv.FormatInt(a.AccountID, 10)] != nil
-	mu.Unlock()
+	i.engine.mu.Lock()
+	busy := i.engine.active[strconv.FormatInt(a.AccountID, 10)] != nil
+	i.engine.mu.Unlock()
 	if err == nil && busy {
 		err = fmt.Errorf("账户正在测试")
 	}
@@ -681,7 +699,7 @@ func (i *inspector) testPhase(ctx context.Context, s InspectionSettings, account
 			} else {
 				req = StartRequest{Type: "candy", Targets: []Target{a.Target}, Model: s.Model, Effort: s.Effort, Runs: runs}
 			}
-			summary, err := startChecked(ctx, req, true, check)
+			summary, err := i.engine.startChecked(ctx, req, true, check)
 			if err == nil && len(summary.Started) != 1 {
 				err = fmt.Errorf("账户忙碌或不可测试")
 				if len(summary.Unavailable) > 0 {
@@ -699,14 +717,14 @@ func (i *inspector) testPhase(ctx context.Context, s InspectionSettings, account
 		}
 		collect := func(id int64, runID string) {
 			if testType == "fingerprint" {
-				mu.Lock()
+				i.engine.mu.Lock()
 				results := []fingerprintResult{}
-				for _, r := range fingerprintResults[strconv.FormatInt(id, 10)] {
+				for _, r := range i.engine.fingerprintResults[strconv.FormatInt(id, 10)] {
 					if r.RunID == runID {
 						results = append(results, r)
 					}
 				}
-				mu.Unlock()
+				i.engine.mu.Unlock()
 				valid := len(results) == 1 && results[0].Attribution != nil && (results[0].Status == "completed" || results[0].Status == "partial") && results[0].Error == ""
 				errorText := "指纹归因结果不完整"
 				if len(results) > 0 && results[0].Error != "" {
@@ -732,14 +750,14 @@ func (i *inspector) testPhase(ctx context.Context, s InspectionSettings, account
 				}
 				return
 			}
-			mu.Lock()
+			i.engine.mu.Lock()
 			results := []candyResult{}
-			for _, r := range candyResults[strconv.FormatInt(id, 10)] {
+			for _, r := range i.engine.candyResults[strconv.FormatInt(id, 10)] {
 				if r.RunID == runID {
 					results = append(results, r)
 				}
 			}
-			mu.Unlock()
+			i.engine.mu.Unlock()
 			valid := len(results) == runs
 			out := []bool{}
 			errorText := "测试结果不完整"
@@ -766,13 +784,13 @@ func (i *inspector) testPhase(ctx context.Context, s InspectionSettings, account
 		}
 		for len(tracked) > 0 {
 			finished := map[int64]string{}
-			mu.Lock()
+			i.engine.mu.Lock()
 			for id, runID := range tracked {
-				if r := active[strconv.FormatInt(id, 10)]; r == nil || r.ID != runID {
+				if r := i.engine.active[strconv.FormatInt(id, 10)]; r == nil || r.ID != runID {
 					finished[id] = runID
 				}
 			}
-			mu.Unlock()
+			i.engine.mu.Unlock()
 			if step == batches-1 {
 				i.mu.Lock()
 				i.state.Done = i.state.Total - len(tracked) + len(finished)
@@ -787,18 +805,18 @@ func (i *inspector) testPhase(ctx context.Context, s InspectionSettings, account
 			}
 			if !waitInspection(phaseCtx, i.poll) {
 				for _, id := range tracked {
-					Cancel(id)
+					i.engine.Cancel(id)
 				}
 				// Keep the round busy until its actual workers exit.
 				for busy := true; busy; {
 					busy = false
-					mu.Lock()
+					i.engine.mu.Lock()
 					for id, runID := range tracked {
-						if r := active[strconv.FormatInt(id, 10)]; r != nil && r.ID == runID {
+						if r := i.engine.active[strconv.FormatInt(id, 10)]; r != nil && r.ID == runID {
 							busy = true
 						}
 					}
-					mu.Unlock()
+					i.engine.mu.Unlock()
 					if busy {
 						time.Sleep(time.Millisecond * 10)
 					}

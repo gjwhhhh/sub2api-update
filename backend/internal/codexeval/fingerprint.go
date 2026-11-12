@@ -50,8 +50,6 @@ var fingerprintSuite = func() []fingerprintChallenge {
 	return suite
 }()
 
-var selectFingerprintChallenges = fingerprintChallenges
-
 func fingerprintChallenges() []fingerprintChallenge {
 	challenges := make([]fingerprintChallenge, fingerprintTarget)
 	for i, j := range rand.Perm(len(fingerprintSuite))[:fingerprintTarget] {
@@ -124,17 +122,7 @@ type fingerprintProgress struct {
 	Concurrency int    `json:"concurrency"`
 }
 
-var (
-	fingerprintSlots   = make(chan struct{}, fingerprintGlobalConcurrency)
-	fingerprintResults = map[string][]fingerprintResult{}
-	fingerprintRunning = map[string]*fingerprintProgress{}
-)
-
-func runFingerprint(ctx context.Context, auth credential, model string, p *fingerprintProgress) {
-	runFingerprintChecked(ctx, auth, model, p, nil)
-}
-
-func runFingerprintChecked(ctx context.Context, auth credential, model string, p *fingerprintProgress, check func() error) {
+func (engine *Engine) runFingerprintChecked(ctx context.Context, auth credential, model string, p *fingerprintProgress, check func() error) {
 	started := time.Now()
 	done := 0
 	stopped := false
@@ -148,16 +136,16 @@ func runFingerprintChecked(ctx context.Context, auth credential, model string, p
 			r.Status, r.Error = "failed", fmt.Sprint(recovered)
 		}
 		r.DurationMS = time.Since(started).Milliseconds()
-		mu.Lock()
-		defer mu.Unlock()
-		delete(fingerprintRunning, auth.ID)
+		engine.mu.Lock()
+		defer engine.mu.Unlock()
+		delete(engine.fingerprintRunning, auth.ID)
 		if stopped {
 			return
 		}
-		fingerprintResults[auth.ID] = appendRecent(fingerprintResults[auth.ID], r)
-		_ = saveStateLocked()
+		engine.fingerprintResults[auth.ID] = appendRecent(engine.fingerprintResults[auth.ID], r)
+		_ = engine.saveStateLocked()
 	}()
-	challenges := selectFingerprintChallenges()
+	challenges := engine.selectFingerprintChallenges()
 	type event struct {
 		index  int
 		sample fingerprintSample
@@ -176,12 +164,12 @@ func runFingerprintChecked(ctx context.Context, auth credential, model string, p
 			defer workers.Done()
 			for i := range jobs {
 				select {
-				case fingerprintSlots <- struct{}{}:
+				case engine.fingerprintSlots <- struct{}{}:
 				case <-ctx.Done():
 					return
 				}
-				sample, output, err := collectFingerprintSample(ctx, auth, model, challenges[i], check)
-				<-fingerprintSlots
+				sample, output, err := engine.collectFingerprintSample(ctx, auth, model, challenges[i], check)
+				<-engine.fingerprintSlots
 				if errors.Is(err, errInspectionStopped) {
 					events <- event{i, sample, output, err}
 					return
@@ -206,9 +194,9 @@ func runFingerprintChecked(ctx context.Context, auth credential, model string, p
 		if !errors.Is(e.err, context.Canceled) {
 			done++
 		}
-		mu.Lock()
+		engine.mu.Lock()
 		p.Done = done
-		mu.Unlock()
+		engine.mu.Unlock()
 	}
 	if stopped {
 		return
@@ -238,9 +226,9 @@ func runFingerprintChecked(ctx context.Context, auth credential, model string, p
 }
 
 // collectFingerprintSample asks challenge until an answer can be scored. The sample keeps the last answer.
-func collectFingerprintSample(ctx context.Context, auth credential, model string, challenge fingerprintChallenge, check func() error) (sample fingerprintSample, out modelResponse, err error) {
+func (engine *Engine) collectFingerprintSample(ctx context.Context, auth credential, model string, challenge fingerprintChallenge, check func() error) (sample fingerprintSample, out modelResponse, err error) {
 	sample.fingerprintChallenge = challenge
-	out, sample.Attempts, err = askCodex(ctx, auth, model, "", challenge.Instructions, challenge.Prompt, challengeTimeout, func(answer string) (err error) {
+	out, sample.Attempts, err = engine.askCodex(ctx, auth, model, "", challenge.Instructions, challenge.Prompt, challengeTimeout, func(answer string) (err error) {
 		sample.Text, sample.Parsed, err = fingerprintText(answer, challenge.ExpectedCount)
 		return err
 	}, check)

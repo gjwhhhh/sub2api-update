@@ -30,7 +30,19 @@ function applyTheme() {
 
 class AuthError extends Error {}
 
-async function api(path, { method = "GET", body, signal } = {}) {
+async function requestStepUp() {
+ if (window.parent === window) throw new Error("请从管理面板的账户评估页面完成二次验证");
+ const requestId = crypto.randomUUID();
+ return new Promise((resolve, reject) => {
+  const timer = setTimeout(() => finish(false), 120000);
+  function finish(ok) { clearTimeout(timer); window.removeEventListener("message", receive); ok ? resolve() : reject(new Error("二次验证已取消或超时")); }
+  function receive(event) { if (event.source === window.parent && event.origin === location.origin && event.data?.type === "evaluation.step-up.result" && event.data.requestId === requestId) finish(event.data.ok === true); }
+  window.addEventListener("message", receive);
+  window.parent.postMessage({type: "evaluation.step-up", requestId}, location.origin);
+ });
+}
+
+async function api(path, { method = "GET", body, signal, stepUpRetried = false } = {}) {
   const timeout = AbortSignal.timeout(30000);
   const requestKey = localStorage.getItem("auth_token");
   if (!requestKey) throw new AuthError("请登录 Sub2API 管理面板，登录后刷新本页");
@@ -50,7 +62,11 @@ async function api(path, { method = "GET", body, signal } = {}) {
   let data = null;
   try { data = JSON.parse(text); } catch (_) {}
   if (resp.status === 401) throw new AuthError("请登录 Sub2API 管理面板，登录后刷新本页");
-  if (resp.status === 403) throw new AuthError("无管理员权限");
+  if (resp.status === 403 && (data?.reason === "STEP_UP_REQUIRED" || data?.code === "STEP_UP_REQUIRED") && !stepUpRetried) {
+    await requestStepUp();
+    return api(path, {method, body, signal, stepUpRetried: true});
+  }
+  if (resp.status === 403) throw new Error(data?.message || "无管理员权限");
   if (!resp.ok) {
     const err = data?.error;
     throw Object.assign(new Error(String((typeof err === "string" ? err : err?.message) || data?.message || text || "HTTP " + resp.status)), { status: resp.status });

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-var-requires -- Standalone Node CommonJS DOM suite. */
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -38,7 +39,7 @@ function harness(preferences = {}, { initializePage = false, api } = {}) {
       ? read("app.js").replace("// Events and initialization.", "api = window.fixtureAPI;\n// Events and initialization.")
       : read("app.js").split("// Events and initialization.")[0], initializePage ? "" : `
     initializeLayout(); initializeModelPickers(); initializeCandy(); initializeFingerprint(); initializePelican(); initializeSIWC(); initializeInspection();`, `
-    window.test = {fillModels,fillInspectionSettings,loadInspectionSettings,saveInspectionSettings,markInspectionEdit,
+    window.test = {callAPI: (...args) => api(...args), fillModels,fillInspectionSettings,loadInspectionSettings,saveInspectionSettings,markInspectionEdit,
       inspectionRemovedModels,setInspectionRemovedModels,
       updateModelPicker,renderInspectionState,validateInspectionFields,loadInspectionState,
       refreshCatalog,resetCatalogCache,stateCredentials,visibleCredentials,targetsFor,fillCredentialTypes,fillPlanFilter,renderCandyRow,renderList,render,
@@ -86,6 +87,38 @@ function groupFixture() {
 }
 
 (async () => {
+  const auth = harness();
+  try {
+    auth.w.localStorage.setItem("auth_token", "fixture-jwt");
+    auth.w.AbortSignal = AbortSignal;
+    let attempts = 0;
+    let accept = true;
+    const parent = { postMessage(message, origin) {
+      assert.equal(origin, auth.w.location.origin);
+      // Forged origins and unrelated request IDs must not resolve the prompt.
+      for (const data of [
+        { origin: "https://other.example", requestId: message.requestId },
+        { origin, requestId: "unrelated" },
+        { origin, requestId: message.requestId },
+      ]) {
+        auth.w.dispatchEvent(new auth.w.MessageEvent("message", { source: parent, origin: data.origin,
+          data: {type: "evaluation.step-up.result", requestId: data.requestId, ok: accept} }));
+      }
+    } };
+    Object.defineProperty(auth.w, "parent", {value: parent});
+    auth.w.fetch = async () => {
+      attempts++;
+      return attempts === 1
+        ? { status: 403, ok: false, text: async () => JSON.stringify({reason: "STEP_UP_REQUIRED"}) }
+        : { status: 200, ok: true, text: async () => JSON.stringify({data: {saved: true}}) };
+    };
+    assert.equal((await auth.h.callAPI("/settings", {method: "PUT", body: {}})).saved, true);
+    assert.equal(attempts, 2, "Successful verification retries the original request once");
+    attempts = 0;
+    accept = false;
+    await assert.rejects(auth.h.callAPI("/settings", {method: "PUT", body: {}}), /二次验证/);
+    assert.equal(attempts, 1, "Cancelled verification must not retry");
+  } finally { auth.close(); }
   const pendingSettings = deferred();
   const startup = harness({ auth_token: "fixture", "sub2api-codex-eval.prefs.pelican": JSON.stringify({ model: "saved/pelican", effort: "high", variant: "obsolete" }) }, {
     initializePage: true, api: async (url) => url.includes("/settings/") ? pendingSettings.promise : groupFixture().api(url),

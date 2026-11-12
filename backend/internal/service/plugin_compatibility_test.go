@@ -46,3 +46,14 @@ func TestMatchesSemverRange(t *testing.T) {
 	assert.False(t, matchesSemverRange("dev", ">=0.1.0"))
 	assert.False(t, matchesSemverRange("0.1.179", "^0.1.0"))
 }
+
+func TestEvaluatePluginCompatibilityCustomBuildMetadata(t *testing.T) {
+	manifest := testPluginManifest(nil)
+	manifest.Requires.Sub2API = ">=0.2.21 <0.3.0"
+	manifest.Requires.TestedSub2APIVersions = []string{"0.2.21"}
+	result := EvaluatePluginCompatibility(manifest, PluginHostInfo{Version: "0.2.21+custom.1", BuildType: "release"})
+	require.True(t, result.Compatible)
+	assert.False(t, result.Tested) // A custom build still requires explicit acceptance.
+	assert.Equal(t, "untested", result.Status)
+	assert.True(t, matchesSemverRange("0.2.21+custom.1", "=0.2.21"))
+}

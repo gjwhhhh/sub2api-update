@@ -35,7 +35,7 @@ func (s *AccountTestService) CodexEvalModels(ctx context.Context, id int64) ([]o
 		return nil, err
 	}
 	if !isCodexEvalAccountSupported(account) {
-		return nil, fmt.Errorf("Unsupported account type: %s/%s", account.Platform, account.Type)
+		return nil, fmt.Errorf("unsupported account type: %s/%s", account.Platform, account.Type)
 	}
 	if account.Platform == PlatformOpenAI {
 		discoveryAccount := account
@@ -153,7 +153,7 @@ func (s *AccountTestService) CodexEvalAccount(ctx context.Context, id int64) (st
 		return "", err
 	}
 	if !isCodexEvalAccountSupported(account) {
-		return "", fmt.Errorf("Unsupported account type: %s/%s", account.Platform, account.Type)
+		return "", fmt.Errorf("unsupported account type: %s/%s", account.Platform, account.Type)
 	}
 	return account.Name, nil
 }
@@ -226,7 +226,7 @@ func normalizeCodexOAuthNonLitePayload(payload map[string]json.RawMessage, model
 func (s *AccountTestService) SendCodexEvaluation(ctx context.Context, id int64, body []byte, headers http.Header) (*http.Response, error) {
 	var payload map[string]json.RawMessage
 	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, fmt.Errorf("Invalid Responses request: %w", err)
+		return nil, fmt.Errorf("invalid Responses request: %w", err)
 	}
 	var model string
 	var stream bool
@@ -240,7 +240,7 @@ func (s *AccountTestService) SendCodexEvaluation(ctx context.Context, id int64, 
 		return nil, err
 	}
 	if !isCodexEvalAccountSupported(account) {
-		return nil, fmt.Errorf("Unsupported account type: %s/%s", account.Platform, account.Type)
+		return nil, fmt.Errorf("unsupported account type: %s/%s", account.Platform, account.Type)
 	}
 	credentialAccount := account
 	if account.IsCredentialShadow() {
@@ -271,13 +271,13 @@ func (s *AccountTestService) SendCodexEvaluation(ctx context.Context, id int64, 
 		if !credentialAccount.IsOpenAIAgentIdentity() {
 			authToken = credentialAccount.GetOpenAIAccessToken()
 			if authToken == "" {
-				return nil, fmt.Errorf("No access token available")
+				return nil, fmt.Errorf("no access token available")
 			}
 		}
 		if customBase := strings.TrimSpace(credentialAccount.GetCredential("base_url")); customBase != "" {
 			normalized, validationErr := s.validateUpstreamBaseURL(customBase)
 			if validationErr != nil {
-				return nil, fmt.Errorf("Invalid base URL: %w", validationErr)
+				return nil, fmt.Errorf("invalid base URL: %w", validationErr)
 			}
 			apiURL = buildOpenAIResponsesURLForPlatform(credentialAccount.Platform, normalized)
 		}
@@ -295,7 +295,7 @@ func (s *AccountTestService) SendCodexEvaluation(ctx context.Context, id int64, 
 			authToken = strings.TrimSpace(credentialAccount.GetCredential("api_key"))
 		}
 		if authToken == "" {
-			return nil, fmt.Errorf("No API key available")
+			return nil, fmt.Errorf("no API key available")
 		}
 		baseURL := strings.TrimSpace(credentialAccount.GetCredential("base_url"))
 		if baseURL == "" {
@@ -306,12 +306,12 @@ func (s *AccountTestService) SendCodexEvaluation(ctx context.Context, id int64, 
 		}
 		normalized, validationErr := s.validateUpstreamBaseURL(baseURL)
 		if validationErr != nil {
-			return nil, fmt.Errorf("Invalid base URL: %w", validationErr)
+			return nil, fmt.Errorf("invalid base URL: %w", validationErr)
 		}
 		if siwcToken == "" {
 			if credentialAccount.RoutesProtocolByInbound() {
 				proto := credentialAccount.GetAPIProtocol()
-				chat = proto != APIProtocolResponses && !(proto == APIProtocolAdaptive && credentialAccount.SupportsNativeCNResponses())
+				chat = proto != APIProtocolResponses && (proto != APIProtocolAdaptive || !credentialAccount.SupportsNativeCNResponses())
 			} else if credentialAccount.routesByModel() {
 				chat = credentialAccount.resolveModelRoutedProtocol(model) != APIProtocolResponses
 			} else {
@@ -424,7 +424,7 @@ func (s *AccountTestService) SendCodexEvaluation(ctx context.Context, id int64, 
 		state := apicompat.NewChatCompletionsToResponsesStreamState(model)
 		tools, toolsErr := apicompat.EffectiveResponsesTools(&responseRequest)
 		if toolsErr != nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			return nil, toolsErr
 		}
 		state.CustomTools = apicompat.CustomToolNames(tools)
@@ -480,7 +480,7 @@ func (s *AccountTestService) sendCodexAnthropicEvaluation(ctx context.Context, a
 	cleanedBody := stripCodexAdditionalToolsFromResponsesBody(body)
 	var responseRequest apicompat.ResponsesRequest
 	if err := json.Unmarshal(cleanedBody, &responseRequest); err != nil {
-		return nil, fmt.Errorf("Invalid Responses request: %w", err)
+		return nil, fmt.Errorf("invalid Responses request: %w", err)
 	}
 	responseRequest.Model = model
 	anthropicReq, err := apicompat.ResponsesToAnthropicRequest(&responseRequest)
@@ -509,12 +509,12 @@ func (s *AccountTestService) sendCodexAnthropicEvaluation(ctx context.Context, a
 			}
 		}
 		if authToken == "" {
-			return nil, fmt.Errorf("No access token available")
+			return nil, fmt.Errorf("no access token available")
 		}
 		if baseURL != "" {
 			normalized, validationErr := s.validateUpstreamBaseURL(baseURL)
 			if validationErr != nil {
-				return nil, fmt.Errorf("Invalid base URL: %w", validationErr)
+				return nil, fmt.Errorf("invalid base URL: %w", validationErr)
 			}
 			apiURL = buildAnthropicMessagesEvalURL(normalized)
 		} else {
@@ -526,7 +526,7 @@ func (s *AccountTestService) sendCodexAnthropicEvaluation(ctx context.Context, a
 			authToken = strings.TrimSpace(credentialAccount.GetOpenAIProtocolAPIKey())
 		}
 		if authToken == "" {
-			return nil, fmt.Errorf("No API key available")
+			return nil, fmt.Errorf("no API key available")
 		}
 		if baseURL == "" {
 			baseURL = strings.TrimSpace(credentialAccount.GetAnthropicProtocolBaseURL())
@@ -536,7 +536,7 @@ func (s *AccountTestService) sendCodexAnthropicEvaluation(ctx context.Context, a
 		}
 		normalized, validationErr := s.validateUpstreamBaseURL(baseURL)
 		if validationErr != nil {
-			return nil, fmt.Errorf("Invalid base URL: %w", validationErr)
+			return nil, fmt.Errorf("invalid base URL: %w", validationErr)
 		}
 		apiURL = buildAnthropicMessagesEvalURL(normalized)
 	}
@@ -591,7 +591,7 @@ func (s *AccountTestService) sendCodexGeminiEvaluation(ctx context.Context, acco
 	cleanedBody := stripCodexAdditionalToolsFromResponsesBody(body)
 	var responseRequest apicompat.ResponsesRequest
 	if err := json.Unmarshal(cleanedBody, &responseRequest); err != nil {
-		return nil, fmt.Errorf("Invalid Responses request: %w", err)
+		return nil, fmt.Errorf("invalid Responses request: %w", err)
 	}
 	responseRequest.Model = model
 	anthropicReq, err := apicompat.ResponsesToAnthropicRequest(&responseRequest)
@@ -628,7 +628,7 @@ func (s *AccountTestService) sendCodexGeminiEvaluation(ctx context.Context, acco
 			}
 		}
 		if accessToken == "" {
-			return nil, fmt.Errorf("No access token available")
+			return nil, fmt.Errorf("no access token available")
 		}
 		baseURL := strings.TrimSpace(credentialAccount.GetCredential("base_url"))
 		projectID := strings.TrimSpace(credentialAccount.GetCredential("project_id"))
@@ -643,7 +643,7 @@ func (s *AccountTestService) sendCodexGeminiEvaluation(ctx context.Context, acco
 			}
 			normalizedBaseURL, validationErr := s.validateUpstreamBaseURL(baseURL)
 			if validationErr != nil {
-				return nil, fmt.Errorf("Invalid base URL: %w", validationErr)
+				return nil, fmt.Errorf("invalid base URL: %w", validationErr)
 			}
 			fullURL, urlErr := buildGeminiAIStudioModelActionURL(normalizedBaseURL, model, "streamGenerateContent", true)
 			if urlErr != nil {
@@ -660,7 +660,7 @@ func (s *AccountTestService) sendCodexGeminiEvaluation(ctx context.Context, acco
 	} else {
 		apiKey := strings.TrimSpace(credentialAccount.GetCredential("api_key"))
 		if apiKey == "" {
-			return nil, fmt.Errorf("No API key available")
+			return nil, fmt.Errorf("no API key available")
 		}
 		baseURL := strings.TrimSpace(credentialAccount.GetCredential("base_url"))
 		if baseURL == "" {
@@ -668,7 +668,7 @@ func (s *AccountTestService) sendCodexGeminiEvaluation(ctx context.Context, acco
 		}
 		normalizedBaseURL, validationErr := s.validateUpstreamBaseURL(baseURL)
 		if validationErr != nil {
-			return nil, fmt.Errorf("Invalid base URL: %w", validationErr)
+			return nil, fmt.Errorf("invalid base URL: %w", validationErr)
 		}
 		fullURL, urlErr := buildGeminiAIStudioModelActionURL(normalizedBaseURL, model, "streamGenerateContent", true)
 		if urlErr != nil {
@@ -738,7 +738,7 @@ func (s *codexChatStream) Read(p []byte) (int, error) {
 		var events []apicompat.ResponsesStreamEvent
 		if err == io.EOF || bytes.Equal(bytes.TrimSpace(data), []byte("[DONE]")) {
 			if s.state.FinishReason == "" {
-				s.fail(fmt.Errorf("Chat Completions stream ended before finish_reason"))
+				s.fail(fmt.Errorf("chat completions stream ended before finish_reason"))
 				continue
 			}
 			if err = s.state.ValidateToolCallArguments(); err != nil {
@@ -753,7 +753,7 @@ func (s *codexChatStream) Read(p []byte) (int, error) {
 			}
 			_ = json.Unmarshal(data, &upstreamError)
 			if len(upstreamError.Error) > 0 && string(upstreamError.Error) != "null" {
-				s.fail(fmt.Errorf("Chat Completions error: %s", data))
+				s.fail(fmt.Errorf("chat completions error: %s", data))
 				continue
 			}
 			var chunk apicompat.ChatCompletionsChunk
@@ -815,7 +815,7 @@ func (s *codexAnthropicStream) Read(p []byte) (int, error) {
 		var events []apicompat.ResponsesStreamEvent
 		if err == io.EOF || bytes.Equal(bytes.TrimSpace(data), []byte("[DONE]")) {
 			if !s.state.CreatedSent {
-				s.fail(fmt.Errorf("Anthropic stream ended before message_start"))
+				s.fail(fmt.Errorf("anthropic stream ended before message_start"))
 				continue
 			}
 			events = append(events, s.flushOpenBlock()...)
@@ -827,7 +827,7 @@ func (s *codexAnthropicStream) Read(p []byte) (int, error) {
 				continue
 			}
 			if evt.Type == "error" {
-				s.fail(fmt.Errorf("Anthropic error: %s", data))
+				s.fail(fmt.Errorf("anthropic error: %s", data))
 				continue
 			}
 			if !s.state.CreatedSent && evt.Type != "message_start" {
@@ -918,7 +918,7 @@ func (s *codexGeminiStream) Read(p []byte) (int, error) {
 		}
 		if err == io.EOF || bytes.Equal(bytes.TrimSpace(data), []byte("[DONE]")) {
 			if !s.seenCandidate {
-				s.fail(fmt.Errorf("Gemini stream ended before candidates"))
+				s.fail(fmt.Errorf("gemini stream ended before candidates"))
 				continue
 			}
 			msgItem := map[string]any{
@@ -955,7 +955,7 @@ func (s *codexGeminiStream) Read(p []byte) (int, error) {
 			continue
 		}
 		if errObj, ok := chunk["error"].(map[string]any); ok && errObj != nil {
-			s.fail(fmt.Errorf("Gemini error: %s", data))
+			s.fail(fmt.Errorf("gemini error: %s", data))
 			continue
 		}
 		if inner, ok := chunk["response"].(map[string]any); ok && inner != nil {
@@ -995,7 +995,7 @@ func (s *codexGeminiStream) Read(p []byte) (int, error) {
 				} else {
 					delta := s.seenText.next(text)
 					if delta != "" {
-						s.textBuilder.WriteString(delta)
+						_, _ = s.textBuilder.WriteString(delta)
 						s.emit("response.output_text.delta", map[string]any{"delta": delta})
 					}
 				}

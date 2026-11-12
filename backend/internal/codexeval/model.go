@@ -34,8 +34,6 @@ const (
 	modelAttempts    = 3
 )
 
-var retryDelay = 2 * time.Second
-
 type retryableError struct{ error }
 
 func (e retryableError) Unwrap() error { return e.error }
@@ -45,9 +43,9 @@ func withModelTimeout(ctx context.Context, limit time.Duration) (context.Context
 }
 
 // askCodex reuses one turn and sums observed usage across its attempts.
-func askCodex(ctx context.Context, auth credential, model, effort, instructions, prompt string, limit time.Duration, accept func(string) error, beforeSend func() error) (out modelResponse, attempts int, err error) {
+func (engine *Engine) askCodex(ctx context.Context, auth credential, model, effort, instructions, prompt string, limit time.Duration, accept func(string) error, beforeSend func() error) (out modelResponse, attempts int, err error) {
 	body, headers := codexTurn("sub2api-account:"+auth.ID, model, effort, instructions, prompt)
-	for delay := retryDelay; ; delay *= 2 {
+	for delay := engine.retryDelay; ; delay *= 2 {
 		if err = ctx.Err(); err != nil {
 			return
 		}
@@ -58,7 +56,7 @@ func askCodex(ctx context.Context, auth credential, model, effort, instructions,
 		}
 		attempts++
 		requestCtx, cancel := withModelTimeout(ctx, limit)
-		response, _, requestErr := executeModel(requestCtx, auth, model, body, headers)
+		response, _, requestErr := engine.executeModel(requestCtx, auth, model, body, headers)
 		cancel()
 		err = requestErr
 		out.Answer = response.Answer
@@ -87,7 +85,7 @@ func askCodex(ctx context.Context, auth credential, model, effort, instructions,
 }
 
 // executeResponse sends a Responses request through the native administrator account sender and reads its stream.
-func executeResponse(ctx context.Context, auth credential, model string, body any, headers http.Header) (out responseBody, status int, err error) {
+func (engine *Engine) executeResponse(ctx context.Context, auth credential, model string, body any, headers http.Header) (out responseBody, status int, err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			err = fmt.Errorf("模型请求异常：%v", recovered)
@@ -99,10 +97,10 @@ func executeResponse(ctx context.Context, auth credential, model string, body an
 	if err = encoder.Encode(body); err != nil {
 		return out, 0, err
 	}
-	response, err := sender(ctx, auth.Target.AccountID, bytes.TrimSuffix(request.Bytes(), []byte("\n")), headers)
+	response, err := engine.sender(ctx, auth.Target.AccountID, bytes.TrimSuffix(request.Bytes(), []byte("\n")), headers)
 	if response != nil {
 		status = response.StatusCode
-		defer response.Body.Close()
+		defer func() { _ = response.Body.Close() }()
 	}
 	if err != nil {
 		var attempted interface{ RequestAttempted() bool }
@@ -112,7 +110,7 @@ func executeResponse(ctx context.Context, auth credential, model string, body an
 		}
 		return out, status, err
 	}
-	stop := context.AfterFunc(ctx, func() { response.Body.Close() })
+	stop := context.AfterFunc(ctx, func() { _ = response.Body.Close() })
 	defer stop()
 	status = response.StatusCode
 	if status != http.StatusOK {
@@ -138,8 +136,8 @@ func executeResponse(ctx context.Context, auth credential, model string, body an
 }
 
 // executeModel sends directly through the native administrator account sender and requires a completed text answer.
-func executeModel(ctx context.Context, auth credential, model string, body any, headers http.Header) (result modelResponse, status int, err error) {
-	out, status, err := executeResponse(ctx, auth, model, body, headers)
+func (engine *Engine) executeModel(ctx context.Context, auth credential, model string, body any, headers http.Header) (result modelResponse, status int, err error) {
+	out, status, err := engine.executeResponse(ctx, auth, model, body, headers)
 	result.InputTokens = out.Usage.InputTokens
 	result.OutputTokens = out.Usage.OutputTokens
 	result.ReasoningTokens = out.Usage.OutputTokensDetails.ReasoningTokens
@@ -159,7 +157,7 @@ func executeModel(ctx context.Context, auth credential, model string, body any, 
 		if item.Type == "message" {
 			for _, part := range item.Content {
 				if part.Type == "output_text" || part.Type == "text" {
-					answer.WriteString(part.Text)
+					_, _ = answer.WriteString(part.Text)
 				}
 			}
 		}

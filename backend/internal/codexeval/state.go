@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"slices"
 )
 
@@ -21,21 +20,14 @@ type persistedState struct {
 	SIWC          map[string][]siwcResult        `json:"siwc,omitempty"`
 }
 
-var (
-	statePath      string
-	loaded         bool
-	stateLoadError error
-	storageError   string
-)
-
-func loadState() {
-	mu.Lock()
-	defer mu.Unlock()
-	if loaded {
+func (engine *Engine) loadState() {
+	engine.mu.Lock()
+	defer engine.mu.Unlock()
+	if engine.loaded {
 		return
 	}
-	loaded = true
-	data, err := os.ReadFile(statePath)
+	engine.loaded = true
+	data, err := engine.historyStore().Load()
 	if errors.Is(err, os.ErrNotExist) {
 		return
 	}
@@ -68,52 +60,42 @@ func loadState() {
 		}
 	}
 	if err != nil {
-		stateLoadError = fmt.Errorf("测试记录读取失败，为保护原文件已暂停保存：%w", err)
-		storageError = stateLoadError.Error()
+		engine.stateLoadError = fmt.Errorf("测试记录读取失败，为保护原文件已暂停保存：%w", err)
+		engine.storageError = engine.stateLoadError.Error()
 		return
 	}
 	if state.Results != nil {
-		candyResults = state.Results
+		engine.candyResults = state.Results
 	}
 	if fingerprints != nil {
-		fingerprintResults = fingerprints
+		engine.fingerprintResults = fingerprints
 	}
 	if state.Pelicans != nil {
-		pelicanResults = state.Pelicans
+		engine.pelicanResults = state.Pelicans
 	}
 	if state.SIWC != nil {
-		siwcResults = state.SIWC
+		engine.siwcResults = state.SIWC
 	}
-	keepRecent(candyResults)
-	keepRecent(fingerprintResults)
-	keepRecent(pelicanResults)
-	keepRecent(siwcResults)
+	keepRecent(engine.candyResults)
+	keepRecent(engine.fingerprintResults)
+	keepRecent(engine.pelicanResults)
+	keepRecent(engine.siwcResults)
 	if version < historySchemaVersion {
 		if version < 2 {
-			for id, records := range pelicanResults {
+			for id, records := range engine.pelicanResults {
 				for i := range records {
 					records[i].Variant = "original"
 				}
-				pelicanResults[id] = records
+				engine.pelicanResults[id] = records
 			}
 		}
-		backup := filepath.Join(filepath.Dir(statePath), fmt.Sprintf("history.v%d.json", version))
-		copy, err := os.OpenFile(backup, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
-		if err == nil {
-			err = copy.Chmod(0600)
-			if err == nil {
-				_, err = copy.Write(data)
-			}
-			if closeErr := copy.Close(); err == nil {
-				err = closeErr
-			}
-		}
+		err := engine.historyStore().Backup(version, data)
 		if err != nil {
-			stateLoadError = fmt.Errorf("测试记录备份失败，已暂停保存：%w", err)
-			storageError = stateLoadError.Error()
+			engine.stateLoadError = fmt.Errorf("测试记录备份失败，已暂停保存：%w", err)
+			engine.storageError = engine.stateLoadError.Error()
 			return
 		}
-		_ = saveStateLocked()
+		_ = engine.saveStateLocked()
 	}
 }
 
@@ -131,50 +113,45 @@ func keepRecent[T any](histories map[string][]T) {
 	}
 }
 
-func currentState() persistedState {
-	return persistedState{SchemaVersion: historySchemaVersion, Results: candyResults, Fingerprints: fingerprintResults, Pelicans: pelicanResults, SIWC: siwcResults}
+func (engine *Engine) currentState() persistedState {
+	return persistedState{SchemaVersion: historySchemaVersion, Results: engine.candyResults, Fingerprints: engine.fingerprintResults, Pelicans: engine.pelicanResults, SIWC: engine.siwcResults}
 }
 
 // Call with mu held so all histories are written as one snapshot.
-func saveStateLocked() (err error) {
+func (engine *Engine) saveStateLocked() (err error) {
 	defer func() {
-		storageError = ""
+		engine.storageError = ""
 		if err != nil {
-			storageError = "测试记录保存失败：" + err.Error()
+			engine.storageError = "测试记录保存失败：" + err.Error()
 		}
 	}()
-	if stateLoadError != nil {
-		return stateLoadError
+	if engine.stateLoadError != nil {
+		return engine.stateLoadError
 	}
-	data, err := json.Marshal(currentState())
+	data, err := json.Marshal(engine.currentState())
 	if err != nil {
 		return err
 	}
-	tmp := statePath + ".tmp"
-	defer os.Remove(tmp)
-	if err = os.WriteFile(tmp, data, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, statePath)
+	return engine.historyStore().Save(data)
 }
 
-func recordResponse(scope string, query url.Values) managementResponse {
+func (engine *Engine) recordResponse(scope string, query url.Values) managementResponse {
 	authID, id := query.Get("auth_id"), query.Get("id")
-	mu.Lock()
-	defer mu.Unlock()
+	engine.mu.Lock()
+	defer engine.mu.Unlock()
 	var record any
 	switch scope {
 	case "fingerprint":
-		if i := slices.IndexFunc(fingerprintResults[authID], func(r fingerprintResult) bool { return r.ID == id }); i >= 0 {
-			record = fingerprintResults[authID][i]
+		if i := slices.IndexFunc(engine.fingerprintResults[authID], func(r fingerprintResult) bool { return r.ID == id }); i >= 0 {
+			record = engine.fingerprintResults[authID][i]
 		}
 	case "pelican":
-		if i := slices.IndexFunc(pelicanResults[authID], func(r pelicanResult) bool { return r.ID == id }); i >= 0 {
-			record = pelicanResults[authID][i]
+		if i := slices.IndexFunc(engine.pelicanResults[authID], func(r pelicanResult) bool { return r.ID == id }); i >= 0 {
+			record = engine.pelicanResults[authID][i]
 		}
 	case "siwc":
-		if i := slices.IndexFunc(siwcResults[authID], func(r siwcResult) bool { return r.ID == id || r.RunID == id }); i >= 0 {
-			record = siwcResults[authID][i]
+		if i := slices.IndexFunc(engine.siwcResults[authID], func(r siwcResult) bool { return r.ID == id || r.RunID == id }); i >= 0 {
+			record = engine.siwcResults[authID][i]
 		}
 	}
 	if record == nil {
@@ -183,31 +160,38 @@ func recordResponse(scope string, query url.Values) managementResponse {
 	return jsonResponse(http.StatusOK, record)
 }
 
-func clearHistoryResponse(scope string) managementResponse {
-	mu.Lock()
-	defer mu.Unlock()
-	previous := currentState()
+func (engine *Engine) clearHistoryResponse(scope string) managementResponse {
+	engine.mu.Lock()
+	defer engine.mu.Unlock()
+	previous := engine.currentState()
 	switch scope {
 	case "fingerprint":
-		fingerprintResults = map[string][]fingerprintResult{}
+		engine.fingerprintResults = map[string][]fingerprintResult{}
 	case "candy":
-		candyResults = map[string][]candyResult{}
+		engine.candyResults = map[string][]candyResult{}
 	case "pelican":
-		pelicanResults = map[string][]pelicanResult{}
+		engine.pelicanResults = map[string][]pelicanResult{}
 	case "siwc":
-		siwcResults = map[string][]siwcResult{}
+		engine.siwcResults = map[string][]siwcResult{}
 	case "all":
-		candyResults, fingerprintResults = map[string][]candyResult{}, map[string][]fingerprintResult{}
-		pelicanResults = map[string][]pelicanResult{}
-		siwcResults = map[string][]siwcResult{}
+		engine.candyResults, engine.fingerprintResults = map[string][]candyResult{}, map[string][]fingerprintResult{}
+		engine.pelicanResults = map[string][]pelicanResult{}
+		engine.siwcResults = map[string][]siwcResult{}
 	default:
 		return jsonError(http.StatusBadRequest, "未知测试类型")
 	}
-	if err := saveStateLocked(); err != nil {
-		candyResults, fingerprintResults = previous.Results, previous.Fingerprints
-		pelicanResults = previous.Pelicans
-		siwcResults = previous.SIWC
+	if err := engine.saveStateLocked(); err != nil {
+		engine.candyResults, engine.fingerprintResults = previous.Results, previous.Fingerprints
+		engine.pelicanResults = previous.Pelicans
+		engine.siwcResults = previous.SIWC
 		return jsonError(http.StatusInternalServerError, "清空测试记录失败："+err.Error())
 	}
 	return jsonResponse(http.StatusOK, map[string]bool{"cleared": true})
+}
+
+func (engine *Engine) historyStore() HistoryStore {
+	if engine.history != nil {
+		return engine.history
+	}
+	return JSONHistoryStore{Path: engine.statePath}
 }

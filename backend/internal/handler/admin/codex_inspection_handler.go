@@ -101,7 +101,7 @@ func (h *AccountHandler) persistInspectionVerdict(ctx context.Context, id int64,
 }
 
 func (h *SettingHandler) InitializeCodexInspection(accounts *AccountHandler) {
-	codexeval.InitializeInspection(codexeval.InspectionHooks{
+	h.evaluation.InitializeInspection(codexeval.InspectionHooks{
 		Load: h.settingService.GetCodexInspectionSettings,
 		List: func(ctx context.Context, settings codexeval.InspectionSettings) ([]codexeval.InspectionAccount, error) {
 			out := []codexeval.InspectionAccount{}
@@ -163,19 +163,20 @@ func (h *SettingHandler) UpdateCodexInspectionSettings(c *gin.Context) {
 		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.evaluation.UpdateInspectionSettings(s)
 	response.Success(c, s.Public())
 }
 func (h *AccountHandler) CodexInspectionState(c *gin.Context) {
-	response.Success(c, codexeval.CurrentInspectionState())
+	response.Success(c, h.evaluation.CurrentInspectionState())
 }
 func (h *AccountHandler) CodexInspectionStart(c *gin.Context) {
-	if err := codexeval.StartInspection(); err != nil {
+	if err := h.evaluation.StartInspection(); err != nil {
 		response.Error(c, http.StatusConflict, err.Error())
 		return
 	}
-	response.Success(c, codexeval.CurrentInspectionState())
+	response.Success(c, h.evaluation.CurrentInspectionState())
 }
 func (h *AccountHandler) CodexInspectionStop(c *gin.Context) {
-	codexeval.CancelInspection()
-	response.Success(c, codexeval.CurrentInspectionState())
+	h.evaluation.CancelInspection()
+	response.Success(c, h.evaluation.CurrentInspectionState())
 }

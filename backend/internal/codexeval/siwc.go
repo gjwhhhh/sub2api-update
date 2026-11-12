@@ -29,21 +29,16 @@ func (r siwcResult) summary() siwcResult {
 	return r
 }
 
-var (
-	siwcResults = map[string][]siwcResult{}
-	siwcRunning = map[string]bool{}
-)
-
-func runSIWC(auth credential, model string) {
-	r := evaluateSIWC(auth, model)
-	mu.Lock()
-	defer mu.Unlock()
-	siwcResults[auth.ID] = appendRecent(siwcResults[auth.ID], r)
-	delete(siwcRunning, auth.ID)
-	_ = saveStateLocked()
+func (engine *Engine) runSIWC(auth credential, model string) {
+	r := engine.evaluateSIWC(auth, model)
+	engine.mu.Lock()
+	defer engine.mu.Unlock()
+	engine.siwcResults[auth.ID] = appendRecent(engine.siwcResults[auth.ID], r)
+	delete(engine.siwcRunning, auth.ID)
+	_ = engine.saveStateLocked()
 }
 
-func evaluateSIWC(auth credential, model string) (r siwcResult) {
+func (engine *Engine) evaluateSIWC(auth credential, model string) (r siwcResult) {
 	now := time.Now()
 	r = siwcResult{
 		Info:   auth.info(),
@@ -62,7 +57,7 @@ func evaluateSIWC(auth credential, model string) (r siwcResult) {
 		"User-Agent":   {"cpa-siwc-check/" + pluginVersion},
 	}
 	requestCtx, cancel := withModelTimeout(auth.ctx, siwcTimeout)
-	out, status, err := executeResponse(requestCtx, auth, model, body, headers)
+	out, status, err := engine.executeResponse(requestCtx, auth, model, body, headers)
 	cancel()
 	r.DurationMS = time.Since(now).Milliseconds()
 	r.InputTokens = out.Usage.InputTokens

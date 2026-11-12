@@ -14,15 +14,17 @@ import (
 )
 
 func TestCodexInspectionConfirmationAndBoundaries(t *testing.T) {
-	oldDelay := retryDelay
-	retryDelay = time.Millisecond
-	t.Cleanup(func() { retryDelay = oldDelay })
-	mu.Lock()
-	loaded = false
-	stateLoadError = nil
-	storageError = ""
-	candyResults = map[string][]candyResult{}
-	mu.Unlock()
+	engine := newTestEngine(t)
+
+	oldDelay := engine.retryDelay
+	engine.retryDelay = time.Millisecond
+	t.Cleanup(func() { engine.retryDelay = oldDelay })
+	engine.mu.Lock()
+	engine.loaded = false
+	engine.stateLoadError = nil
+	engine.storageError = ""
+	engine.candyResults = map[string][]candyResult{}
+	engine.mu.Unlock()
 	var lock sync.Mutex
 	calls := map[int64]int{}
 	updates := map[int64]int{}
@@ -47,7 +49,7 @@ func TestCodexInspectionConfirmationAndBoundaries(t *testing.T) {
 			accounts[n].PlanType = "pro"
 		}
 	}
-	Initialize(t.TempDir(), func(ctx context.Context, id int64, _ []byte, _ http.Header) (*http.Response, error) {
+	engine.initialize(t.TempDir(), func(ctx context.Context, id int64, _ []byte, _ http.Header) (*http.Response, error) {
 		lock.Lock()
 		calls[id]++
 		n := calls[id]
@@ -148,7 +150,7 @@ func TestCodexInspectionConfirmationAndBoundaries(t *testing.T) {
 			return fmt.Errorf("notification failed")
 		},
 	}
-	i := newInspector(hooks)
+	i := engine.newInspector(hooks)
 	defer i.cancel()
 	i.poll = time.Millisecond
 	i.recovery = time.Millisecond
@@ -204,10 +206,12 @@ func TestCodexInspectionConfirmationAndBoundaries(t *testing.T) {
 }
 
 func TestCodexInspectionInvalidInitialSettingsBlockStart(t *testing.T) {
+	engine := newTestEngine(t)
+
 	settings := DefaultInspectionSettings()
 	settings.Enabled = true
 	settings.DegradedPriority = 5
-	i := newInspector(InspectionHooks{
+	i := engine.newInspector(InspectionHooks{
 		Load: func(context.Context) (InspectionSettings, error) { return settings, nil },
 	})
 	defer i.cancel()
@@ -223,20 +227,22 @@ func TestCodexInspectionInvalidInitialSettingsBlockStart(t *testing.T) {
 }
 
 func TestCodexInspectionCancelAndSchedule(t *testing.T) {
-	mu.Lock()
-	loaded = false
-	stateLoadError = nil
-	storageError = ""
-	candyResults = map[string][]candyResult{}
-	mu.Unlock()
+	engine := newTestEngine(t)
+
+	engine.mu.Lock()
+	engine.loaded = false
+	engine.stateLoadError = nil
+	engine.storageError = ""
+	engine.candyResults = map[string][]candyResult{}
+	engine.mu.Unlock()
 	started := make(chan struct{}, 1)
-	Initialize(t.TempDir(), func(ctx context.Context, _ int64, _ []byte, _ http.Header) (*http.Response, error) {
+	engine.initialize(t.TempDir(), func(ctx context.Context, _ int64, _ []byte, _ http.Header) (*http.Response, error) {
 		started <- struct{}{}
 		<-ctx.Done()
 		return nil, ctx.Err()
 	}, func(context.Context, int64) (string, error) { return "fake", nil })
 	a := InspectionAccount{Target: Target{AccountID: 42}, GroupIDs: []int64{101}, Type: "oauth", Available: true, Enabled: true, AutoInspectionEnabled: true}
-	i := newInspector(InspectionHooks{List: func(context.Context, InspectionSettings) ([]InspectionAccount, error) {
+	i := engine.newInspector(InspectionHooks{List: func(context.Context, InspectionSettings) ([]InspectionAccount, error) {
 		return []InspectionAccount{a}, nil
 	}, Get: func(context.Context, int64) (InspectionAccount, error) { return a, nil },
 		PersistVerdict: func(context.Context, int64, InspectionVerdict, InspectionSettings) error {
@@ -326,11 +332,13 @@ func TestCodexInspectionNotifications(t *testing.T) {
 }
 
 func TestCodexInspectionRestartSchedulesFreshWait(t *testing.T) {
+	engine := newTestEngine(t)
+
 	s := DefaultInspectionSettings()
 	s.Enabled = true
 	s.GroupID = 101
 	loaded := make(chan struct{})
-	i := newInspector(InspectionHooks{Load: func(context.Context) (InspectionSettings, error) { close(loaded); return s, nil }})
+	i := engine.newInspector(InspectionHooks{Load: func(context.Context) (InspectionSettings, error) { close(loaded); return s, nil }})
 	i.loadInitialSettings()
 	go i.loop()
 	defer func() { i.cancel(); <-i.done }()
@@ -426,21 +434,23 @@ func TestCodexInspectionCandySelection(t *testing.T) {
 }
 
 func TestCodexInspectionFingerprintModeAndWildcards(t *testing.T) {
- // Recovery compares the same mock answers to the same challenge environments.
- // Randomly choosing different expected counts changes attribution between runs.
- oldSelect := selectFingerprintChallenges
- selectFingerprintChallenges = func() []fingerprintChallenge { return fingerprintSuite[:fingerprintTarget] }
- t.Cleanup(func() { selectFingerprintChallenges = oldSelect })
-	oldDelay := retryDelay
-	retryDelay = time.Millisecond
-	t.Cleanup(func() { retryDelay = oldDelay })
-	mu.Lock()
-	loaded = false
-	stateLoadError = nil
-	storageError = ""
-	candyResults = map[string][]candyResult{}
-	fingerprintResults = map[string][]fingerprintResult{}
-	mu.Unlock()
+	engine := newTestEngine(t)
+
+	// Recovery compares the same mock answers to the same challenge environments.
+	// Randomly choosing different expected counts changes attribution between runs.
+	oldSelect := engine.selectFingerprintChallenges
+	engine.selectFingerprintChallenges = func() []fingerprintChallenge { return fingerprintSuite[:fingerprintTarget] }
+	t.Cleanup(func() { engine.selectFingerprintChallenges = oldSelect })
+	oldDelay := engine.retryDelay
+	engine.retryDelay = time.Millisecond
+	t.Cleanup(func() { engine.retryDelay = oldDelay })
+	engine.mu.Lock()
+	engine.loaded = false
+	engine.stateLoadError = nil
+	engine.storageError = ""
+	engine.candyResults = map[string][]candyResult{}
+	engine.fingerprintResults = map[string][]fingerprintResult{}
+	engine.mu.Unlock()
 
 	accounts := []InspectionAccount{
 		{Target: Target{AccountID: 1}, Name: "codex-match", Email: "match@team.io", Platform: "openai", Type: "oauth", PlanType: "pro", GroupIDs: []int64{101}, Available: true, Enabled: true, AutoInspectionEnabled: true, Priority: 10},
@@ -449,7 +459,7 @@ func TestCodexInspectionFingerprintModeAndWildcards(t *testing.T) {
 	var lock sync.Mutex
 	calls := 0
 	verdicts := map[int64]InspectionVerdict{}
-	Initialize(t.TempDir(), func(_ context.Context, _ int64, _ []byte, _ http.Header) (*http.Response, error) {
+	engine.initialize(t.TempDir(), func(_ context.Context, _ int64, _ []byte, _ http.Header) (*http.Response, error) {
 		lock.Lock()
 		calls++
 		lock.Unlock()
@@ -462,7 +472,7 @@ func TestCodexInspectionFingerprintModeAndWildcards(t *testing.T) {
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body))}, nil
 	}, func(context.Context, int64) (string, error) { return "fp-account", nil })
 
-	i := newInspector(InspectionHooks{
+	i := engine.newInspector(InspectionHooks{
 		List: func(context.Context, InspectionSettings) ([]InspectionAccount, error) {
 			return accounts, nil
 		},
@@ -512,9 +522,9 @@ func TestCodexInspectionFingerprintModeAndWildcards(t *testing.T) {
 		t.Fatalf("expected fingerprint mismatch to mark account degraded: %+v", verdicts)
 	}
 
-	mu.Lock()
-	predicted := fingerprintResults["1"][0].Attribution.Prediction
-	mu.Unlock()
+	engine.mu.Lock()
+	predicted := engine.fingerprintResults["1"][0].Attribution.Prediction
+	engine.mu.Unlock()
 	s.Model = predicted
 	i.configure(s)
 	if err := i.start(); err != nil {
@@ -528,20 +538,22 @@ func TestCodexInspectionFingerprintModeAndWildcards(t *testing.T) {
 }
 
 func TestCodexInspectionDegradedWrongOnce(t *testing.T) {
-	mu.Lock()
-	loaded, stateLoadError, storageError = false, nil, ""
-	candyResults = map[string][]candyResult{}
-	mu.Unlock()
+	engine := newTestEngine(t)
+
+	engine.mu.Lock()
+	engine.loaded, engine.stateLoadError, engine.storageError = false, nil, ""
+	engine.candyResults = map[string][]candyResult{}
+	engine.mu.Unlock()
 	calls, saves, applications, priorityWrites, notifications := 0, 0, 0, 0, 0
 	answer := "20"
-	Initialize(t.TempDir(), func(context.Context, int64, []byte, http.Header) (*http.Response, error) {
+	engine.initialize(t.TempDir(), func(context.Context, int64, []byte, http.Header) (*http.Response, error) {
 		calls++
 		body := fmt.Sprintf("data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":%q}]}]}}\n\n", answer)
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body))}, nil
 	}, func(context.Context, int64) (string, error) { return "verdict lifecycle", nil })
 	listed := InspectionAccount{Target: Target{AccountID: 91}, GroupIDs: []int64{101}, Type: "oauth", Available: true, Enabled: true, AutoInspectionEnabled: true, Priority: 10}
 	current := listed
-	i := newInspector(InspectionHooks{
+	i := engine.newInspector(InspectionHooks{
 		List: func(context.Context, InspectionSettings) ([]InspectionAccount, error) {
 			return []InspectionAccount{listed}, nil
 		},
@@ -594,13 +606,13 @@ func TestCodexInspectionDegradedWrongOnce(t *testing.T) {
 		answer = step.answer
 		s.NotifyEnabled = step.notify
 		i.configure(s)
-		beforeCalls, beforeResults := calls, len(candyResults["91"])
+		beforeCalls, beforeResults := calls, len(engine.candyResults["91"])
 		if err := i.start(); err != nil {
 			t.Fatal(err)
 		}
 		<-i.runDone
 		r := i.snapshot().Results[0]
-		if calls-beforeCalls != step.tests || r.Tests != step.tests || len(candyResults["91"])-beforeResults != step.tests || current.Verdict != step.verdict || saves != step.saves || notifications != step.sent || current.Priority != 10 || r.Error != "" {
+		if calls-beforeCalls != step.tests || r.Tests != step.tests || len(engine.candyResults["91"])-beforeResults != step.tests || current.Verdict != step.verdict || saves != step.saves || notifications != step.sent || current.Priority != 10 || r.Error != "" {
 			t.Fatalf("%s: calls=%d result=%+v account=%+v saves=%d", step.name, calls-beforeCalls, r, current, saves)
 		}
 		if step.tests == 1 && (r.Outcome != "unchanged" || r.TargetPriority != nil) {
@@ -625,13 +637,15 @@ func TestCodexInspectionDegradedWrongOnce(t *testing.T) {
 }
 
 func TestCodexInspectionWriteFailures(t *testing.T) {
+	engine := newTestEngine(t)
+
 	for _, failedWrite := range []string{"verdict", "priority", "matching"} {
 		t.Run(failedWrite, func(t *testing.T) {
-			mu.Lock()
-			loaded, stateLoadError, storageError = false, nil, ""
-			candyResults = map[string][]candyResult{}
-			mu.Unlock()
-			Initialize(t.TempDir(), func(context.Context, int64, []byte, http.Header) (*http.Response, error) {
+			engine.mu.Lock()
+			engine.loaded, engine.stateLoadError, engine.storageError = false, nil, ""
+			engine.candyResults = map[string][]candyResult{}
+			engine.mu.Unlock()
+			engine.initialize(t.TempDir(), func(context.Context, int64, []byte, http.Header) (*http.Response, error) {
 				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"20\"}]}]}}\n\n"))}, nil
 			}, func(context.Context, int64) (string, error) { return "write failure", nil })
 			a := InspectionAccount{Target: Target{AccountID: 93}, GroupIDs: []int64{101}, Type: "oauth", Available: true, Enabled: true, AutoInspectionEnabled: true, Priority: 42, Verdict: InspectionVerdictNormal}
@@ -640,7 +654,7 @@ func TestCodexInspectionWriteFailures(t *testing.T) {
 			}
 			originalPriority := a.Priority
 			verdictWrites, priorityWrites, notifications := 0, 0, 0
-			i := newInspector(InspectionHooks{
+			i := engine.newInspector(InspectionHooks{
 				List: func(context.Context, InspectionSettings) ([]InspectionAccount, error) {
 					return []InspectionAccount{a}, nil
 				},
@@ -677,9 +691,10 @@ func TestCodexInspectionWriteFailures(t *testing.T) {
 			r := i.snapshot().Results[0]
 			wantVerdict, wantPriorityWrites, wantNotifications := InspectionVerdictNormal, 0, 0
 			wantOutcome, wantError := "error", "fixture "+failedWrite+" write failed"
-			if failedWrite == "priority" {
+			switch failedWrite {
+			case "priority":
 				wantVerdict, wantPriorityWrites, wantNotifications = InspectionVerdictDegraded, 1, 1
-			} else if failedWrite == "matching" {
+			case "matching":
 				wantVerdict, wantNotifications = InspectionVerdictDegraded, 1
 				wantOutcome, wantError = "recommended", ""
 			}
@@ -691,16 +706,18 @@ func TestCodexInspectionWriteFailures(t *testing.T) {
 }
 
 func TestCodexInspectionParticipationStopsLaterSends(t *testing.T) {
-	mu.Lock()
-	loaded, stateLoadError, storageError = false, nil, ""
-	candyResults = map[string][]candyResult{}
-	mu.Unlock()
+	engine := newTestEngine(t)
+
+	engine.mu.Lock()
+	engine.loaded, engine.stateLoadError, engine.storageError = false, nil, ""
+	engine.candyResults = map[string][]candyResult{}
+	engine.mu.Unlock()
 	var lock sync.Mutex
 	a := InspectionAccount{Target: Target{GroupID: 101, AccountID: 92}, GroupIDs: []int64{101}, Type: "oauth", Available: true, Enabled: true, Priority: 10}
 	calls := 0
 	confirmation := make(chan struct{})
 	release := make(chan struct{})
-	Initialize(t.TempDir(), func(context.Context, int64, []byte, http.Header) (*http.Response, error) {
+	engine.initialize(t.TempDir(), func(context.Context, int64, []byte, http.Header) (*http.Response, error) {
 		calls++
 		if calls == 2 {
 			close(confirmation)
@@ -708,7 +725,7 @@ func TestCodexInspectionParticipationStopsLaterSends(t *testing.T) {
 		}
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"20\"}]}]}}\n\n"))}, nil
 	}, func(context.Context, int64) (string, error) { return "participation", nil })
-	i := newInspector(InspectionHooks{
+	i := engine.newInspector(InspectionHooks{
 		List: func(context.Context, InspectionSettings) ([]InspectionAccount, error) {
 			lock.Lock()
 			defer lock.Unlock()
@@ -758,31 +775,31 @@ func TestCodexInspectionParticipationStopsLaterSends(t *testing.T) {
 	close(release)
 	<-i.runDone
 	r := i.snapshot().Results[0]
-	if calls != 2 || r.Tests != 2 || r.Outcome != "unchanged" || r.Error != "" || r.TargetPriority != nil || len(candyResults["92"]) != 2 {
+	if calls != 2 || r.Tests != 2 || r.Outcome != "unchanged" || r.Error != "" || r.TargetPriority != nil || len(engine.candyResults["92"]) != 2 {
 		t.Fatalf("opt-out calls=%d result=%+v", calls, r)
 	}
-	for _, result := range candyResults["92"] {
+	for _, result := range engine.candyResults["92"] {
 		if result.Error != "" {
 			t.Fatal("opt-out created a test error")
 		}
 	}
 	// Manual fixed-count tests remain usable for this opted-out account.
-	_, err := Start(context.Background(), StartRequest{Type: "candy", Targets: []Target{a.Target}, Model: "fixture", Runs: 3})
+	_, err := engine.Start(context.Background(), StartRequest{Type: "candy", Targets: []Target{a.Target}, Model: "fixture", Runs: 3})
 	if err != nil {
 		t.Fatal(err)
 	}
-	waitIdle(t)
-	if calls != 5 || len(candyResults["92"]) != 5 {
+	engine.waitIdle(t)
+	if calls != 5 || len(engine.candyResults["92"]) != 5 {
 		t.Fatalf("manual count changed: %d", calls)
 	}
 	// Opt-out during backoff stops this logical result before another send.
-	oldDelay := retryDelay
-	retryDelay = 20 * time.Millisecond
-	t.Cleanup(func() { retryDelay = oldDelay })
+	oldDelay := engine.retryDelay
+	engine.retryDelay = 20 * time.Millisecond
+	t.Cleanup(func() { engine.retryDelay = oldDelay })
 	lock.Lock()
 	a.AutoInspectionEnabled = true
 	lock.Unlock()
-	sender = func(context.Context, int64, []byte, http.Header) (*http.Response, error) {
+	engine.sender = func(context.Context, int64, []byte, http.Header) (*http.Response, error) {
 		calls++
 		lock.Lock()
 		a.AutoInspectionEnabled = false
@@ -794,7 +811,7 @@ func TestCodexInspectionParticipationStopsLaterSends(t *testing.T) {
 	}
 	<-i.runDone
 	r = i.snapshot().Results[0]
-	if calls != 6 || r.Tests != 0 || r.Outcome != "unchanged" || r.Error != "" || len(candyResults["92"]) != 5 {
-		t.Fatalf("backoff opt-out calls=%d result=%+v history=%d", calls, r, len(candyResults["92"]))
+	if calls != 6 || r.Tests != 0 || r.Outcome != "unchanged" || r.Error != "" || len(engine.candyResults["92"]) != 5 {
+		t.Fatalf("backoff opt-out calls=%d result=%+v history=%d", calls, r, len(engine.candyResults["92"]))
 	}
 }

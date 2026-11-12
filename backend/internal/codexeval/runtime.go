@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 )
 
 // One evaluation instance belongs to the native server. Account credentials remain
@@ -37,13 +36,6 @@ func (a credential) info() Info { return Info{a.Target, a.Name, a.runID} }
 type Sender func(context.Context, int64, []byte, http.Header) (*http.Response, error)
 type Resolver func(context.Context, int64) (string, error)
 
-var (
-	mu      sync.Mutex
-	sender  Sender
-	resolve Resolver
-	active  = map[string]*run{}
-)
-
 type run struct {
 	ID       string `json:"id"`
 	Type     string `json:"type"`
@@ -53,13 +45,13 @@ type run struct {
 	cancel   context.CancelFunc
 }
 
-func Initialize(dataDir string, send Sender, lookup Resolver) {
-	sender, resolve = send, lookup
-	statePath = filepath.Join(dataDir, "codex-eval", "history.json")
-	if err := os.MkdirAll(filepath.Dir(statePath), 0700); err != nil {
-		storageError = err.Error()
+func (engine *Engine) initialize(dataDir string, send Sender, lookup Resolver) {
+	engine.sender, engine.resolve = send, lookup
+	engine.statePath = filepath.Join(dataDir, "codex-eval", "history.json")
+	if err := os.MkdirAll(filepath.Dir(engine.statePath), 0700); err != nil {
+		engine.storageError = err.Error()
 	}
-	loadState()
+	engine.loadState()
 }
 
 type StartRequest struct {
@@ -81,15 +73,24 @@ type StartSummary struct {
 	Unavailable []unavailable `json:"unavailable"`
 }
 
-func Start(ctx context.Context, req StartRequest) (StartSummary, error) {
-	return start(ctx, req, false)
+func (engine *Engine) Start(ctx context.Context, req StartRequest) (StartSummary, error) {
+	return engine.start(ctx, req, false)
 }
 
-func start(ctx context.Context, req StartRequest, inspection bool) (StartSummary, error) {
-	return startChecked(ctx, req, inspection, nil)
+func (engine *Engine) start(ctx context.Context, req StartRequest, inspection bool) (StartSummary, error) {
+	return engine.startChecked(ctx, req, inspection, nil)
 }
 
-func startChecked(ctx context.Context, req StartRequest, inspection bool, check func(context.Context, int64) error) (StartSummary, error) {
+func (engine *Engine) startChecked(ctx context.Context, req StartRequest, inspection bool, check func(context.Context, int64) error) (StartSummary, error) {
+	engine.mu.Lock()
+	stopped := engine.stopped
+	engine.mu.Unlock()
+	if stopped {
+		return StartSummary{}, ErrStopped
+	}
+	if engine.resolve == nil || engine.sender == nil {
+		return StartSummary{}, fmt.Errorf("评估服务尚未初始化")
+	}
 	summary := StartSummary{Started: []run{}, Busy: []Target{}, Unavailable: []unavailable{}}
 	req.Model = strings.TrimSpace(req.Model)
 	req.Effort = strings.TrimSpace(req.Effort)
@@ -136,16 +137,20 @@ func startChecked(ctx context.Context, req StartRequest, inspection bool, check 
 			summary.Unavailable = append(summary.Unavailable, unavailable{target, "账户与分组 ID 必须为正整数"})
 			continue
 		}
-		name, err := resolve(ctx, target.AccountID)
+		name, err := engine.resolve(ctx, target.AccountID)
 		if err != nil {
 			summary.Unavailable = append(summary.Unavailable, unavailable{target, err.Error()})
 			continue
 		}
 		id := strconv.FormatInt(target.AccountID, 10)
-		mu.Lock()
-		if active[id] != nil {
+		engine.mu.Lock()
+		if engine.stopped {
+			engine.mu.Unlock()
+			return summary, ErrStopped
+		}
+		if engine.active[id] != nil {
 			summary.Busy = append(summary.Busy, target)
-			mu.Unlock()
+			engine.mu.Unlock()
 			continue
 		}
 		parent := context.Background()
@@ -156,50 +161,52 @@ func startChecked(ctx context.Context, req StartRequest, inspection bool, check 
 		a := credential{id, target, name, uuidV7().String(), runCtx}
 		r := &run{ID: a.runID, Type: req.Type, Target: target, Status: "running"}
 		r.cancel = cancel
-		active[id] = r
+		engine.active[id] = r
 		switch req.Type {
 		case "candy":
-			candyRunning[id] = &candyProgress{Total: req.Runs}
-			r.Progress = candyRunning[id]
+			engine.candyRunning[id] = &candyProgress{Total: req.Runs}
+			r.Progress = engine.candyRunning[id]
 		case "pelican":
-			pelicanRunning[id] = true
+			engine.pelicanRunning[id] = true
 		case "fingerprint":
-			fingerprintRunning[id] = &fingerprintProgress{Model: req.Model, Total: fingerprintTarget, Concurrency: req.Concurrency}
-			r.Progress = fingerprintRunning[id]
+			engine.fingerprintRunning[id] = &fingerprintProgress{Model: req.Model, Total: fingerprintTarget, Concurrency: req.Concurrency}
+			r.Progress = engine.fingerprintRunning[id]
 		case "siwc":
-			siwcRunning[id] = true
+			engine.siwcRunning[id] = true
 		}
 		// Start replies expose identity; state serializes progress under the lock.
 		copyRun := *r
 		copyRun.Progress = nil
 		copyRun.cancel = nil
 		summary.Started = append(summary.Started, copyRun)
-		fpProgress := fingerprintRunning[id]
-		mu.Unlock()
+		engine.workers.Add(1)
+		fpProgress := engine.fingerprintRunning[id]
+		engine.mu.Unlock()
 		go func() {
-			defer func() { cancel(); mu.Lock(); delete(active, id); mu.Unlock() }()
+			defer engine.workers.Done()
+			defer func() { cancel(); engine.mu.Lock(); delete(engine.active, id); engine.mu.Unlock() }()
 			var beforeSend func() error
 			if check != nil {
 				beforeSend = func() error { return check(runCtx, target.AccountID) }
 			}
 			switch req.Type {
 			case "candy":
-				runCandyChecked(a, req.Model, req.Effort, req.Runs, beforeSend)
+				engine.runCandyChecked(a, req.Model, req.Effort, req.Runs, beforeSend)
 			case "pelican":
-				runPelican(a, req.Model, req.Effort, variant)
+				engine.runPelican(a, req.Model, req.Effort, variant)
 			case "fingerprint":
-				runFingerprintChecked(runCtx, a, req.Model, fpProgress, beforeSend)
+				engine.runFingerprintChecked(runCtx, a, req.Model, fpProgress, beforeSend)
 			case "siwc":
-				runSIWC(a, req.Model)
+				engine.runSIWC(a, req.Model)
 			}
 		}()
 	}
 	return summary, nil
 }
-func Cancel(id string) bool {
-	mu.Lock()
-	defer mu.Unlock()
-	for _, r := range active {
+func (engine *Engine) Cancel(id string) bool {
+	engine.mu.Lock()
+	defer engine.mu.Unlock()
+	for _, r := range engine.active {
 		if r.ID == id {
 			r.Status = "cancelling"
 			r.cancel()
@@ -208,30 +215,30 @@ func Cancel(id string) bool {
 	}
 	return false
 }
-func State() ([]byte, error) {
-	mu.Lock()
-	defer mu.Unlock()
-	runs := make([]*run, 0, len(active))
-	for _, r := range active {
+func (engine *Engine) State() ([]byte, error) {
+	engine.mu.Lock()
+	defer engine.mu.Unlock()
+	runs := make([]*run, 0, len(engine.active))
+	for _, r := range engine.active {
 		runs = append(runs, r)
 	}
 	fp := map[string][]fingerprintResult{}
 	pl := map[string][]pelicanResult{}
 	sw := map[string][]siwcResult{}
-	for id, rs := range fingerprintResults {
-		fp[id] = summaries(rs)
+	for id, rs := range engine.fingerprintResults {
+		fp[id] = summaries(rs, fingerprintResult.summary)
 	}
-	for id, rs := range pelicanResults {
-		pl[id] = summaries(rs)
+	for id, rs := range engine.pelicanResults {
+		pl[id] = summaries(rs, pelicanResult.summary)
 	}
-	for id, rs := range siwcResults {
-		sw[id] = summaries(rs)
+	for id, rs := range engine.siwcResults {
+		sw[id] = summaries(rs, siwcResult.summary)
 	}
-	raw, err := json.Marshal(map[string]any{"active": runs, "candy": candyResults, "fingerprint": fp, "pelican": pl, "siwc": sw, "storage_error": storageError})
+	raw, err := json.Marshal(map[string]any{"active": runs, "candy": engine.candyResults, "fingerprint": fp, "pelican": pl, "siwc": sw, "storage_error": engine.storageError})
 	return raw, err
 }
-func Record(kind string, accountID int64, id string) ([]byte, int) {
-	r := recordResponse(kind, url.Values{"auth_id": {strconv.FormatInt(accountID, 10)}, "id": {id}})
+func (engine *Engine) Record(kind string, accountID int64, id string) ([]byte, int) {
+	r := engine.recordResponse(kind, url.Values{"auth_id": {strconv.FormatInt(accountID, 10)}, "id": {id}})
 	if r.StatusCode != 200 {
 		return r.Body, r.StatusCode
 	}
@@ -239,17 +246,20 @@ func Record(kind string, accountID int64, id string) ([]byte, int) {
 	raw, _ := json.Marshal(map[string]any{"type": kind, kind: record})
 	return raw, 200
 }
-func Clear(scope string) ([]byte, int) { r := clearHistoryResponse(scope); return r.Body, r.StatusCode }
+func (engine *Engine) Clear(scope string) ([]byte, int) {
+	r := engine.clearHistoryResponse(scope)
+	return r.Body, r.StatusCode
+}
 func failedStatus(ctx context.Context) string {
 	if ctx.Err() != nil {
 		return "cancelled"
 	}
 	return "failed"
 }
-func summaries[T interface{ summary() T }](rs []T) []T {
+func summaries[T any](rs []T, summarize func(T) T) []T {
 	out := make([]T, len(rs))
 	for i, r := range rs {
-		out[i] = r.summary()
+		out[i] = summarize(r)
 	}
 	return out
 }

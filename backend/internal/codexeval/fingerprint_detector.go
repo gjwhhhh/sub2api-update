@@ -453,7 +453,7 @@ func positionKernel(numbers []int) []float64 {
 	out := make([]float64, 34*3)
 	for position, value := range numbers {
 		t := (float64(position)+0.5)*2/n - 1
-		basis := [3]float64{t, 0.5 * (3*t*t - 1), 0.5 * (5*math.Pow(t, 3) - 3*t)}
+		basis := [3]float64{t, 0.5 * (3*t*t - 1), 0.5 * (5*(t*t*t) - 3*t)}
 		for k := range 34 {
 			weight := 0.0
 			if k < 24 {

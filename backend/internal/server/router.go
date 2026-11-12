@@ -113,8 +113,6 @@ func registerRoutes(
 	cfg *config.Config,
 	redisClient *redis.Client,
 ) {
-	h.Admin.Account.InitializeCodexEval(cfg.Pricing.DataDir)
-	h.Admin.Setting.InitializeCodexInspection(h.Admin.Account)
 	r.GET("/codex-eval", h.Admin.Account.CodexEvalPage)
 	r.GET("/codex-eval/", h.Admin.Account.CodexEvalPage)
 	// 通用路由（健康检查、状态等）

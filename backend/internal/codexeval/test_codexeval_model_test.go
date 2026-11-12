@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -24,19 +25,21 @@ func modelTestResponse(text string, status int) *http.Response {
 }
 
 func TestCodexEvalRetries(t *testing.T) {
-	oldSender, oldDelay := sender, retryDelay
-	if retryDelay != 2*time.Second || modelAttempts != 3 {
+	engine := newTestEngine(t)
+
+	oldSender, oldDelay := engine.sender, engine.retryDelay
+	if engine.retryDelay != 2*time.Second || modelAttempts != 3 {
 		t.Fatal("retry defaults changed")
 	}
-	retryDelay = 5 * time.Millisecond
-	t.Cleanup(func() { sender, retryDelay = oldSender, oldDelay })
+	engine.retryDelay = 5 * time.Millisecond
+	t.Cleanup(func() { engine.sender, engine.retryDelay = oldSender, oldDelay })
 	auth := credential{ID: "7", Target: Target{AccountID: 7}, ctx: context.Background()}
 	t.Run("same turn and cumulative usage", func(t *testing.T) {
 		calls := 0
 		var firstBody []byte
 		var firstHeaders http.Header
 		var sent []time.Time
-		sender = func(_ context.Context, _ int64, body []byte, headers http.Header) (*http.Response, error) {
+		engine.sender = func(_ context.Context, _ int64, body []byte, headers http.Header) (*http.Response, error) {
 			calls++
 			sent = append(sent, time.Now())
 			if calls == 1 {
@@ -52,7 +55,7 @@ func TestCodexEvalRetries(t *testing.T) {
 			}
 			return modelTestResponse(answer, 200), nil
 		}
-		out, attempts, err := askCodex(auth.ctx, auth, "literal", "low", "", "prompt", answerTimeout, func(answer string) error {
+		out, attempts, err := engine.askCodex(auth.ctx, auth, "literal", "low", "", "prompt", answerTimeout, func(answer string) error {
 			if answer != "accepted" {
 				return errors.New("reject")
 			}
@@ -61,7 +64,7 @@ func TestCodexEvalRetries(t *testing.T) {
 		if err != nil || attempts != 3 || out.Answer != "accepted" || out.InputTokens != 6 || out.OutputTokens != 9 || out.ReasoningTokens != 3 {
 			t.Fatalf("out=%+v attempts=%d err=%v", out, attempts, err)
 		}
-		if sent[1].Sub(sent[0]) < retryDelay || sent[2].Sub(sent[1]) < 2*retryDelay {
+		if sent[1].Sub(sent[0]) < engine.retryDelay || sent[2].Sub(sent[1]) < 2*engine.retryDelay {
 			t.Fatal("retry did not wait")
 		}
 	})
@@ -78,14 +81,14 @@ func TestCodexEvalRetries(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			calls := 0
-			sender = func(context.Context, int64, []byte, http.Header) (*http.Response, error) {
+			engine.sender = func(context.Context, int64, []byte, http.Header) (*http.Response, error) {
 				calls++
 				if tc.status == 0 {
 					return nil, tc.transport
 				}
 				return modelTestResponse("20", tc.status), tc.transport
 			}
-			_, attempts, err := askCodex(auth.ctx, auth, "literal", "low", "", "prompt", answerTimeout, nil, nil)
+			_, attempts, err := engine.askCodex(auth.ctx, auth, "literal", "low", "", "prompt", answerTimeout, nil, nil)
 			if attempts != tc.want || calls != tc.want || (tc.status != 200 && err == nil) {
 				t.Fatalf("attempts=%d calls=%d err=%v", attempts, calls, err)
 			}
@@ -93,27 +96,29 @@ func TestCodexEvalRetries(t *testing.T) {
 	}
 	t.Run("stream failure retains observed usage", func(t *testing.T) {
 		calls := 0
-		sender = func(context.Context, int64, []byte, http.Header) (*http.Response, error) {
+		engine.sender = func(context.Context, int64, []byte, http.Header) (*http.Response, error) {
 			calls++
 			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("data: {\"type\":\"response.in_progress\",\"usage\":{\"input_tokens\":7}}\n\n"))}, nil
 		}
-		out, attempts, err := askCodex(auth.ctx, auth, "literal", "", "", "prompt", answerTimeout, nil, nil)
+		out, attempts, err := engine.askCodex(auth.ctx, auth, "literal", "", "", "prompt", answerTimeout, nil, nil)
 		if err == nil || attempts != 3 || calls != 3 || out.InputTokens != 21 {
 			t.Fatalf("out=%+v attempts=%d err=%v", out, attempts, err)
 		}
 	})
 	t.Run("cancel during backoff", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		calls := 0
-		sender = func(context.Context, int64, []byte, http.Header) (*http.Response, error) {
-			calls++
-			time.AfterFunc(time.Millisecond, cancel)
-			return modelTestResponse("", 503), nil
-		}
-		_, attempts, err := askCodex(ctx, auth, "literal", "", "", "prompt", answerTimeout, nil, nil)
-		if !errors.Is(err, context.Canceled) || attempts != 1 || calls != 1 {
-			t.Fatalf("attempts=%d calls=%d err=%v", attempts, calls, err)
-		}
+		synctest.Test(t, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			calls := 0
+			engine.sender = func(context.Context, int64, []byte, http.Header) (*http.Response, error) {
+				calls++
+				time.AfterFunc(time.Millisecond, cancel)
+				return modelTestResponse("", 503), nil
+			}
+			_, attempts, err := engine.askCodex(ctx, auth, "literal", "", "", "prompt", answerTimeout, nil, nil)
+			if !errors.Is(err, context.Canceled) || attempts != 1 || calls != 1 {
+				t.Fatalf("attempts=%d calls=%d err=%v", attempts, calls, err)
+			}
+		})
 	})
 }

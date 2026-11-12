@@ -12,9 +12,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func (h *AccountHandler) InitializeCodexEval(dataDir string) {
-	codexeval.Initialize(dataDir, h.accountTestService.SendCodexEvaluation, h.accountTestService.CodexEvalAccount)
-}
 func (h *AccountHandler) CodexEvalPage(c *gin.Context) {
 	c.Header("X-Frame-Options", "SAMEORIGIN")
 	c.Header("Content-Security-Policy", "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src data:; font-src data:; frame-src 'self' blob:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'")
@@ -22,7 +19,7 @@ func (h *AccountHandler) CodexEvalPage(c *gin.Context) {
 	c.Data(200, "text/html; charset=utf-8", codexeval.Page())
 }
 func (h *AccountHandler) CodexEvalState(c *gin.Context) {
-	raw, err := codexeval.State()
+	raw, err := h.evaluation.State()
 	if err != nil {
 		response.Error(c, 500, err.Error())
 		return
@@ -50,7 +47,7 @@ func (h *AccountHandler) CodexEvalStart(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	out, err := codexeval.Start(c.Request.Context(), req)
+	out, err := h.evaluation.Start(c.Request.Context(), req)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -65,7 +62,7 @@ func (h *AccountHandler) CodexEvalCancel(c *gin.Context) {
 		response.BadRequest(c, "run_id is required")
 		return
 	}
-	response.Success(c, map[string]bool{"cancelled": codexeval.Cancel(req.RunID)})
+	response.Success(c, map[string]bool{"cancelled": h.evaluation.Cancel(req.RunID)})
 }
 func (h *AccountHandler) CodexEvalRecord(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("account_id"), 10, 64)
@@ -73,7 +70,7 @@ func (h *AccountHandler) CodexEvalRecord(c *gin.Context) {
 		response.BadRequest(c, "Invalid account ID")
 		return
 	}
-	raw, status := codexeval.Record(c.Param("type"), id, c.Param("record_id"))
+	raw, status := h.evaluation.Record(c.Param("type"), id, c.Param("record_id"))
 	if status != 200 {
 		c.Data(status, "application/json", raw)
 		return
@@ -88,7 +85,7 @@ func (h *AccountHandler) CodexEvalClear(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	raw, status := codexeval.Clear(req.Scope)
+	raw, status := h.evaluation.Clear(req.Scope)
 	if status != 200 {
 		c.Data(status, "application/json", raw)
 		return
@@ -129,8 +126,8 @@ func (h *AccountHandler) CodexEval(c *gin.Context) {
 		}
 		return
 	}
-	defer resp.Body.Close()
-	stop := context.AfterFunc(c.Request.Context(), func() { resp.Body.Close() })
+	defer func() { _ = resp.Body.Close() }()
+	stop := context.AfterFunc(c.Request.Context(), func() { _ = resp.Body.Close() })
 	defer stop()
 	if contentType := resp.Header.Get("Content-Type"); contentType != "" {
 		c.Header("Content-Type", contentType)

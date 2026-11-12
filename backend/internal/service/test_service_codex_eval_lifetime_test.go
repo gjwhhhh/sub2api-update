@@ -102,12 +102,14 @@ func TestCodexEvalBackgroundNativeStreamLifetime(t *testing.T) {
 			native := service.NewAccountTestService(codexLifetimeAccountRepo{account: account}, nil, nil, nil, nil,
 				repository.NewHTTPUpstream(cfg), cfg, nil)
 			dataDir := t.TempDir()
-			codexeval.Initialize(dataDir, func(ctx context.Context, id int64, body []byte, h http.Header) (*http.Response, error) {
+			engine := codexeval.New(dataDir, func(ctx context.Context, id int64, body []byte, h http.Header) (*http.Response, error) {
 				response, err := native.SendCodexEvaluation(ctx, id, body, h)
 				headers <- err
 				return response, err
 			}, native.CodexEvalAccount)
 			handler := &admin.AccountHandler{}
+			handler.SetEvaluationEngine(engine)
+			t.Cleanup(func() { _ = engine.Stop(context.Background()) })
 			router := gin.New()
 			admissions := make(chan context.Context, 2)
 			router.POST("/start", func(c *gin.Context) { admissions <- c.Request.Context(); handler.CodexEvalStart(c) })
@@ -130,7 +132,7 @@ func TestCodexEvalBackgroundNativeStreamLifetime(t *testing.T) {
 				post("/start", codexeval.StartRequest{Type: "candy", Targets: []codexeval.Target{{GroupID: 1, AccountID: account.ID}}, Model: "literal", Runs: 3}, &response)
 				require.Len(t, response.Data.Started, 1)
 				id := response.Data.Started[0].ID
-				t.Cleanup(func() { codexeval.Cancel(id) })
+				t.Cleanup(func() { engine.Cancel(id) })
 				select {
 				case err := <-headers:
 					require.NoError(t, err)
@@ -162,7 +164,7 @@ func TestCodexEvalBackgroundNativeStreamLifetime(t *testing.T) {
 					close(release)
 				}
 				require.Eventually(t, func() bool {
-					raw, err := codexeval.State()
+					raw, err := engine.State()
 					if err != nil {
 						return false
 					}

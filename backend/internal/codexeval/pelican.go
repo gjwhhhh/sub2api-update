@@ -66,25 +66,20 @@ func (r pelicanResult) summary() pelicanResult {
 	return r
 }
 
-var (
-	pelicanResults = map[string][]pelicanResult{}
-	pelicanRunning = map[string]bool{}
-)
-
-func runPelican(auth credential, model, effort string, variant pelicanVariant) {
-	r := evaluatePelican(auth, model, effort, variant)
-	mu.Lock()
-	defer mu.Unlock()
-	pelicanResults[auth.ID] = appendRecent(pelicanResults[auth.ID], r)
-	delete(pelicanRunning, auth.ID)
-	_ = saveStateLocked()
+func (engine *Engine) runPelican(auth credential, model, effort string, variant pelicanVariant) {
+	r := engine.evaluatePelican(auth, model, effort, variant)
+	engine.mu.Lock()
+	defer engine.mu.Unlock()
+	engine.pelicanResults[auth.ID] = appendRecent(engine.pelicanResults[auth.ID], r)
+	delete(engine.pelicanRunning, auth.ID)
+	_ = engine.saveStateLocked()
 }
 
-func evaluatePelican(auth credential, model, effort string, variant pelicanVariant) pelicanResult {
+func (engine *Engine) evaluatePelican(auth credential, model, effort string, variant pelicanVariant) pelicanResult {
 	now := time.Now()
 	r := pelicanResult{Info: auth.info(), Status: "completed", ID: fmt.Sprint(now.UnixNano()), Time: now.UTC(), Model: model, Effort: effort, Variant: variant.ID}
 	var page string
-	out, attempts, err := askCodex(auth.ctx, auth, model, effort, "", variant.Prompt, answerTimeout, func(answer string) (err error) {
+	out, attempts, err := engine.askCodex(auth.ctx, auth, model, effort, "", variant.Prompt, answerTimeout, func(answer string) (err error) {
 		page, err = variant.page(answer)
 		return err
 	}, nil)

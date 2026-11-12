@@ -74,6 +74,5 @@ func (s *SettingService) UpdateCodexInspectionSettings(ctx context.Context, next
 	if err = s.settingRepo.SetMultiple(ctx, values); err != nil {
 		return current, err
 	}
-	codexeval.UpdateInspectionSettings(next)
 	return next, nil
 }

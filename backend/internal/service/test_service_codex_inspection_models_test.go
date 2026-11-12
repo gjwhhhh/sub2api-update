@@ -63,7 +63,7 @@ func TestCodexInspectionModelTransitions(t *testing.T) {
 			require.Zero(t, repo.merges)
 			require.Equal(t, []string{"gpt-6.1-sol"}, a.Extra[codexInspectionRemovedModels])
 			require.Equal(t, "degraded", a.Extra[codexInspectionVerdict])
-			require.Equal(t, "gpt-6.1-sol", before.Credentials["model_mapping"].(map[string]any)["gpt-6.1-sol"])
+			require.Equal(t, "gpt-6.1-sol", before.GetModelMapping()["gpt-6.1-sol"])
 			require.True(t, a.Schedulable)
 			if final {
 				require.Equal(t, map[string]any{"blacklist": "blacklist"}, a.Credentials["model_mapping"])
@@ -74,17 +74,17 @@ func TestCodexInspectionModelTransitions(t *testing.T) {
 				require.Equal(t, "gpt-6.1-sol", a.GetModelMapping()["alias"])
 				require.Equal(t, "other", a.GetModelMapping()["other"])
 				require.True(t, a.IsModelSupported("gpt-6.1-sol"), "wildcards keep native admission")
-				a.Credentials["model_mapping"].(map[string]any)["gpt-6.1-sol"] = "new-administrator-target"
+				codexEvalCredentialModelMapping(t, a)["gpt-6.1-sol"] = "new-administrator-target"
 			}
 			require.NoError(t, svc.PersistCodexInspectionVerdict(ctx, 20, codexeval.InspectionVerdictDegraded, s))
 			require.Equal(t, 1, repo.updates, "stable matching models need no write")
 			require.Zero(t, repo.merges)
-			a.Credentials["model_mapping"].(map[string]any)["gpt-6-sol"] = "gpt-6-sol"
+			codexEvalCredentialModelMapping(t, a)["gpt-6-sol"] = "gpt-6-sol"
 			require.NoError(t, svc.PersistCodexInspectionVerdict(ctx, 20, codexeval.InspectionVerdictDegraded, s))
 			a = repo.accounts[20]
 			require.Equal(t, 2, repo.updates, "stable degradation must apply newly available identity entries")
 			require.Equal(t, []string{"gpt-6.1-sol", "gpt-6-sol"}, a.Extra[codexInspectionRemovedModels])
-			a.Credentials["model_mapping"].(map[string]any)["gpt-6-sol"] = "gpt-6-sol"
+			codexEvalCredentialModelMapping(t, a)["gpt-6-sol"] = "gpt-6-sol"
 			require.NoError(t, svc.PersistCodexInspectionVerdict(ctx, 20, codexeval.InspectionVerdictDegraded, s))
 			a = repo.accounts[20]
 			require.Equal(t, []string{"gpt-6.1-sol", "gpt-6-sol"}, a.Extra[codexInspectionRemovedModels], "repeated removals must not duplicate saved names")
@@ -116,6 +116,13 @@ func TestCodexInspectionModelTransitions(t *testing.T) {
 			require.Zero(t, repo.merges, "matching restored state needs no write")
 		})
 	}
+}
+
+func codexEvalCredentialModelMapping(t *testing.T, account *Account) map[string]any {
+	t.Helper()
+	mapping, ok := account.Credentials["model_mapping"].(map[string]any)
+	require.True(t, ok, "model_mapping must be a JSON object")
+	return mapping
 }
 
 func TestCodexInspectionModelSkips(t *testing.T) {
