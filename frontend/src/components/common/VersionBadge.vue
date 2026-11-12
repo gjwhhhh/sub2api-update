@@ -10,7 +10,7 @@
             ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50'
             : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-800 dark:text-dark-400 dark:hover:bg-dark-700'
         ]"
-        :title="hasUpdate ? t('version.updateAvailable') : t('version.upToDate')"
+        :title="hasUpdate ? t('version.updateAvailable') : isCustomBuild ? t('version.customBuildHint') : t('version.upToDate')"
       >
         <span v-if="currentVersion" class="font-medium">v{{ currentVersion }}</span>
         <span
@@ -89,7 +89,7 @@
                   <span v-else class="text-2xl font-bold text-gray-400 dark:text-dark-500">--</span>
                   <!-- Show check mark when up to date -->
                   <span
-                    v-if="!hasUpdate"
+                    v-if="!hasUpdate && !isCustomBuild"
                     class="flex h-5 w-5 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30"
                   >
                     <svg
@@ -109,7 +109,9 @@
                   {{
                     hasUpdate
                       ? t('version.latestVersion') + ': v' + latestVersion
-                      : t('version.upToDate')
+                      : isCustomBuild
+                        ? t('version.customBuildHint')
+                        : t('version.upToDate')
                   }}
                 </p>
               </div>
@@ -357,8 +359,14 @@
 
               <!-- Priority 5: Up to date - GitHub link + version rollback -->
               <div v-else class="space-y-2">
+                <div
+                  v-if="isCustomBuild"
+                  class="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-700 dark:border-blue-800/50 dark:bg-blue-900/20 dark:text-blue-300"
+                >
+                  {{ t('version.customBuildHint') }}
+                </div>
                 <a
-                  v-if="releaseInfo?.html_url && releaseInfo.html_url !== '#'"
+                  v-else-if="releaseInfo?.html_url && releaseInfo.html_url !== '#'"
                   :href="releaseInfo.html_url"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -375,7 +383,7 @@
                 </a>
 
                 <!-- Version rollback entry -->
-                <div class="border-t border-gray-100 pt-2 dark:border-dark-700">
+                <div v-if="!isCustomBuild" class="border-t border-gray-100 pt-2 dark:border-dark-700">
                   <button
                     @click="toggleRollbackPanel"
                     class="group flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-xs text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-600 dark:text-dark-500 dark:hover:bg-dark-700/50 dark:hover:text-dark-300"
@@ -676,6 +684,7 @@ const latestVersion = computed(() => appStore.latestVersion)
 const hasUpdate = computed(() => appStore.hasUpdate)
 const releaseInfo = computed(() => appStore.releaseInfo)
 const buildType = computed(() => appStore.buildType)
+const isCustomBuild = computed(() => buildType.value === 'custom')
 
 // Update process states (local to this component)
 const updating = ref(false)

@@ -31,6 +31,7 @@ export default {
     refresh: 'Refresh',
     sourceMode: 'Source Build',
     sourceModeHint: 'Source build, use git pull to update',
+    customBuildHint: 'This is a custom build. Update it from your own custom release.',
     updateNow: 'Update Now',
     updating: 'Updating...',
     updateComplete: 'Update Complete',

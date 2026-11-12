@@ -32,11 +32,11 @@ class ReleaseMatrixTest(unittest.TestCase):
         Path('backend/cmd/server').mkdir(parents=True)
         release.VERSION_FILE.write_text('9.8.7\n')
 
-    def fixture_artifacts(self, simple=False):
+    def fixture_artifacts(self, simple=False, version='9.8.7'):
         directory = Path('release-input')
         directory.mkdir()
         for target in release.targets(simple):
-            name = release.archive_name('9.8.7', target)
+            name = release.archive_name(version, target)
             archive = directory / name
             if target['goos'] == 'linux':
                 with tarfile.open(archive, 'w:gz') as out:
@@ -46,10 +46,10 @@ class ReleaseMatrixTest(unittest.TestCase):
                     out.addfile(info, io.BytesIO(b'fixture'))
             else:
                 archive.write_bytes(b'fixture archive')
-            metadata = {'version': '9.8.7', 'sha': 'a' * 40, 'target': target,
+            metadata = {'version': version, 'sha': 'a' * 40, 'target': target,
                         'archive': name, 'sha256': release.sha256(archive)}
             (directory / f"manifest-{target['goos']}-{target['goarch']}.json").write_text(json.dumps(metadata))
-        return argparse.Namespace(input='release-input', version='9.8.7', sha='a' * 40, simple=simple, output='contexts')
+        return argparse.Namespace(input='release-input', version=version, sha='a' * 40, simple=simple, output='contexts')
 
     def test_full_and_simple_matrix_match_existing_targets(self):
         full = release.targets()
@@ -68,6 +68,7 @@ class ReleaseMatrixTest(unittest.TestCase):
         self.assertEqual(leaf['release'], original['release'])
         self.assertFalse(leaf['dockers'])
         self.assertIn('{{ .Env.RELEASE_DATE }}', '\n'.join(leaf['builds'][0]['ldflags']))
+        self.assertIn('-X main.Version={{ .Env.RELEASE_HOST_VERSION }}', leaf['builds'][0]['ldflags'])
 
     def test_publication_config_has_no_compilation_or_docker_work(self):
         for simple in (False, True):
@@ -115,11 +116,75 @@ class ReleaseMatrixTest(unittest.TestCase):
         Path('deploy/docker-entrypoint.sh').write_text('#!/bin/sh\nexec /app/sub2api\n')
         Path('backend/resources').mkdir()
         Path('backend/resources/data').write_text('fixture')
+        Path('third_party/codex-candy-eval').mkdir(parents=True)
+        Path('third_party/codex-candy-eval/LICENSE').write_text('fixture license')
         release.contexts(args)
         for arch in ('amd64', 'arm64'):
             binary = Path('contexts') / arch / 'sub2api'
             self.assertEqual(binary.read_bytes(), b'fixture')
             self.assertEqual(binary.stat().st_mode & 0o777, 0o755)
+            self.assertEqual((binary.parent / 'third_party/codex-candy-eval/LICENSE').read_text(), 'fixture license')
+
+    def test_custom_versions_separate_host_metadata_and_artifact_names(self):
+        self.assertEqual(release.release_versions('custom-v0.2.21.1'), ('0.2.21-custom.1', '0.2.21+custom.1'))
+        self.assertEqual(release.release_versions('v9.8.7'), ('9.8.7', '9.8.7'))
+        for tag in ('custom-v0.2.21', 'custom-v0.2.21.0', 'custom-v0.2.21.01', 'custom-v0.2.21.1/evil', 'main'):
+            with self.subTest(tag=tag), self.assertRaises(ValueError):
+                release.release_versions(tag)
+
+    def test_custom_plan_binds_tag_and_preserves_host_semver(self):
+        for dry_run in (False, True):
+            with self.subTest(dry_run=dry_run):
+                Path('outputs').write_text('')
+                with patch.dict(os.environ, {'GITHUB_OUTPUT': 'outputs'}), patch.object(subprocess, 'check_output', return_value='a' * 40 + '\n'):
+                    release.plan(argparse.Namespace(ref='custom-v0.2.21.1', dry_run=dry_run, simple=False))
+                output = dict(line.split('=', 1) for line in Path('outputs').read_text().splitlines())
+                self.assertEqual(output['tag'], 'custom-v0.2.21.1')
+                self.assertEqual(output['version'], '0.2.21-custom.1')
+                self.assertEqual(output['host_version'], '0.2.21+custom.1')
+                self.assertEqual(output['custom'], 'true')
+                self.assertEqual(release.VERSION_FILE.read_text(), '0.2.21+custom.1\n')
+
+    def test_custom_release_notes_bind_verified_artifacts(self):
+        self.fixture_artifacts(version='0.2.21-custom.1')
+        source = Path('third_party/codex-candy-eval/source.json')
+        source.parent.mkdir(parents=True)
+        shutil.copyfile(ROOT / source, source)
+        with patch.dict(os.environ, {'RELEASE_TAG': 'custom-v0.2.21.1', 'RELEASE_VERSION': '0.2.21-custom.1',
+                                     'RELEASE_SHA': 'a' * 40, 'GITHUB_REPOSITORY': 'ExampleOwner/sub2api', 'SIMPLE_RELEASE': 'false'}):
+            release.custom_notes(argparse.Namespace(output='notes.md', checksums='checksums.txt'))
+        self.assertIn('0.2.21+custom.1', Path('notes.md').read_text())
+        self.assertIn('ghcr.io/exampleowner/sub2api:0.2.21-custom.1', Path('notes.md').read_text())
+        self.assertEqual(len(Path('checksums.txt').read_text().splitlines()), 5)
+
+    def test_custom_image_alias_does_not_replace_upstream_aliases(self):
+        fake_bin = Path('bin')
+        fake_bin.mkdir()
+        docker = fake_bin / 'docker'
+        docker.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$DOCKER_LOG"\n')
+        docker.chmod(0o755)
+        for simple in (False, True):
+            log_path = Path(f'custom-{simple}.log').resolve()
+            env = {**os.environ, 'PATH': str(fake_bin.resolve()) + os.pathsep + os.environ['PATH'],
+                   'DOCKER_LOG': str(log_path), 'RUNNER_TEMP': self.temp.name,
+                   'RELEASE_VERSION': '0.2.21-custom.1', 'RELEASE_SHA': 'a' * 40, 'GITHUB_REPOSITORY': 'ExampleOwner/sub2api',
+                   'DRY_RUN': 'false', 'SIMPLE_RELEASE': str(simple).lower(), 'DOCKERHUB_USERNAME': 'skip'}
+            subprocess.run(['bash', str(ROOT / '.github/release-tools/release-images.sh')], env=env, check=True)
+            log = log_path.read_text()
+            self.assertIn('sub2api:custom-latest', log)
+            self.assertNotIn('sub2api:latest', log)
+            self.assertNotIn('sub2api:0 ', log)
+            self.assertNotIn('sub2api:0.2 ', log)
+
+    def test_local_version_resolver_under_custom_tag(self):
+        script = Path('backend/scripts/resolve-version.sh')
+        script.parent.mkdir(parents=True)
+        shutil.copyfile(ROOT / script, script)
+        subprocess.run(['git', 'init', '-q'], check=True)
+        subprocess.run(['git', 'add', 'backend'], check=True)
+        subprocess.run(['git', '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.com', 'commit', '-qm', 'fixture'], check=True)
+        subprocess.run(['git', 'tag', 'custom-v0.2.21.12'], check=True)
+        self.assertEqual(subprocess.check_output(['sh', str(script)], text=True).strip(), '0.2.21+custom.12')
 
     def test_plan_requires_a_tag_for_publication(self):
         args = argparse.Namespace(ref='main', dry_run=False, simple=False)

@@ -31,6 +31,7 @@ export default {
     refresh: '刷新',
     sourceMode: '源码构建',
     sourceModeHint: '源码构建请使用 git pull 更新',
+    customBuildHint: '这是自定义版本，请从自有仓库的定制发布更新。',
     updateNow: '立即更新',
     updating: '正在更新...',
     updateComplete: '更新完成',

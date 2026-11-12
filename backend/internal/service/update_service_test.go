@@ -12,10 +12,13 @@ import (
 )
 
 type updateServiceCacheStub struct {
-	data string
+	data     string
+	getCalls int
+	setCalls int
 }
 
 func (s *updateServiceCacheStub) GetUpdateInfo(context.Context) (string, error) {
+	s.getCalls++
 	if s.data == "" {
 		return "", errors.New("cache miss")
 	}
@@ -23,6 +26,7 @@ func (s *updateServiceCacheStub) GetUpdateInfo(context.Context) (string, error) 
 }
 
 func (s *updateServiceCacheStub) SetUpdateInfo(_ context.Context, data string, _ time.Duration) error {
+	s.setCalls++
 	s.data = data
 	return nil
 }
@@ -31,13 +35,17 @@ type updateServiceGitHubClientStub struct {
 	release        *GitHubRelease
 	recentReleases []*GitHubRelease
 	recentErr      error
+	latestCalls    int
+	recentCalls    int
 }
 
 func (s *updateServiceGitHubClientStub) FetchLatestRelease(context.Context, string) (*GitHubRelease, error) {
+	s.latestCalls++
 	return s.release, nil
 }
 
 func (s *updateServiceGitHubClientStub) FetchRecentReleases(context.Context, string, int) ([]*GitHubRelease, error) {
+	s.recentCalls++
 	return s.recentReleases, s.recentErr
 }
 
@@ -67,6 +75,31 @@ func TestUpdateServicePerformUpdateNoUpdateReturnsSentinel(t *testing.T) {
 	require.Error(t, err)
 	require.True(t, errors.Is(err, ErrNoUpdateAvailable))
 	require.ErrorIs(t, err, ErrNoUpdateAvailable)
+}
+
+func TestUpdateServiceCustomBuildDoesNotUseOfficialUpdateChannel(t *testing.T) {
+	cache := &updateServiceCacheStub{}
+	github := &updateServiceGitHubClientStub{}
+	svc := NewUpdateService(cache, github, "0.2.21+custom.1", "release")
+
+	info, err := svc.CheckUpdate(context.Background(), true)
+	require.NoError(t, err)
+	require.Equal(t, "0.2.21+custom.1", info.CurrentVersion)
+	require.Equal(t, info.CurrentVersion, info.LatestVersion)
+	require.False(t, info.HasUpdate)
+	require.Equal(t, "custom", info.BuildType)
+	require.Equal(t, 0, cache.getCalls)
+	require.Equal(t, 0, cache.setCalls)
+	require.Equal(t, 0, github.latestCalls)
+
+	require.ErrorIs(t, svc.PerformUpdate(context.Background()), ErrCustomBuildUpdateUnsupported)
+	versions, err := svc.ListRollbackVersions(context.Background())
+	require.NoError(t, err)
+	require.Empty(t, versions)
+	require.ErrorIs(t, svc.RollbackToVersion(context.Background(), "0.2.21"), ErrCustomBuildUpdateUnsupported)
+	require.ErrorIs(t, svc.Rollback(), ErrCustomBuildUpdateUnsupported)
+	require.Equal(t, 0, github.latestCalls)
+	require.Equal(t, 0, github.recentCalls)
 }
 
 func newRollbackTestService(current string, releases []*GitHubRelease) *UpdateService {

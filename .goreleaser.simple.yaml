@@ -48,6 +48,7 @@ dockers:
     dockerfile: Dockerfile.goreleaser
     use: buildx
     extra_files:
+      - third_party
       - deploy/docker-entrypoint.sh
       - backend/resources
     build_flag_templates:

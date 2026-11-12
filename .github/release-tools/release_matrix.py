@@ -18,6 +18,18 @@ FULL_CONFIG = Path('.goreleaser.yaml')
 SIMPLE_CONFIG = Path('.goreleaser.simple.yaml')
 VERSION_FILE = Path('backend/cmd/server/VERSION')
 VERSION_RE = re.compile(r'\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?')
+CUSTOM_TAG_RE = re.compile(r'custom-v(\d+\.\d+\.\d+)\.([1-9]\d*)')
+
+
+def release_versions(tag):
+    """Keep Docker/archive names valid and preserve host SemVer precedence."""
+    custom = CUSTOM_TAG_RE.fullmatch(tag)
+    if custom:
+        base, revision = custom.groups()
+        return f'{base}-custom.{revision}', f'{base}+custom.{revision}'
+    if tag.startswith('v') and VERSION_RE.fullmatch(tag[1:]):
+        return tag[1:], tag[1:]
+    raise ValueError('publishing requires a v-prefixed or custom-vX.Y.Z.N release version tag')
 
 
 def config(simple=False):
@@ -53,20 +65,24 @@ def sha256(path):
 def plan(args):
     sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
     if args.dry_run:
-        version = VERSION_FILE.read_text().strip()
-        tag = 'v' + version
+        host_version = VERSION_FILE.read_text().strip()
+        custom = re.fullmatch(r'(\d+\.\d+\.\d+)\+custom\.([1-9]\d*)', host_version)
+        tag = f'custom-v{custom[1]}.{custom[2]}' if custom else 'v' + host_version
+        # A requested custom tag can be previewed before creating it.
+        if CUSTOM_TAG_RE.fullmatch(args.ref):
+            tag = args.ref
+        version, host_version = release_versions(tag)
     else:
         tag = args.ref
-        version = tag.removeprefix('v')
-        if not tag.startswith('v') or not VERSION_RE.fullmatch(version):
-            raise ValueError('publishing requires a v-prefixed release version tag')
+        version, host_version = release_versions(tag)
         tagged_sha = subprocess.check_output(['git', 'rev-parse', '--verify', f'refs/tags/{tag}^{{commit}}'], text=True).strip()
         if sha != tagged_sha:
             raise ValueError('checkout does not match the selected release tag')
     if not VERSION_RE.fullmatch(version):
         raise ValueError('invalid VERSION')
-    VERSION_FILE.write_text(version + '\n')
+    VERSION_FILE.write_text(host_version + '\n')
     result = {'sha': sha, 'tag': tag, 'version': version,
+              'host_version': host_version, 'custom': str(tag.startswith('custom-v')).lower(),
               'owner_lower': os.environ.get('GITHUB_REPOSITORY_OWNER', '').lower(),
               'simple': str(args.simple).lower(), 'dry_run': str(args.dry_run).lower(),
               'date': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
@@ -89,6 +105,7 @@ def generate_config(args):
             build['goos'], build['goarch'], build['ignore'] = [args.goos], [args.goarch], []
             build['ldflags'] = [re.sub(r'{{\s*\.Date\s*}}', '{{ .Env.RELEASE_DATE }}', flag)
                                 for flag in build.get('ldflags', [])]
+            build['ldflags'].append('-X main.Version={{ .Env.RELEASE_HOST_VERSION }}')
     else:
         # Artifacts are supplied through the OSS extra_files mechanism. No build
         # is repeated on the publishing runner, and release templates stay intact.
@@ -152,6 +169,25 @@ def contexts(args):
         (dest / 'deploy').mkdir(exist_ok=True)
         shutil.copy2('deploy/docker-entrypoint.sh', dest / 'deploy/docker-entrypoint.sh')
         shutil.copytree('backend/resources', dest / 'backend/resources', dirs_exist_ok=True)
+        if Path('third_party').is_dir():
+            shutil.copytree('third_party', dest / 'third_party', dirs_exist_ok=True)
+
+
+def custom_notes(args):
+    version, host_version = release_versions(os.environ['RELEASE_TAG'])
+    if version != os.environ['RELEASE_VERSION'] or not CUSTOM_TAG_RE.fullmatch(os.environ['RELEASE_TAG']):
+        raise ValueError('custom release identity mismatch')
+    verify(argparse.Namespace(input='release-input', version=version, sha=os.environ['RELEASE_SHA'],
+                              simple=os.environ.get('SIMPLE_RELEASE') == 'true'))
+    archives = sorted(Path('release-input').glob('sub2api_*'))
+    Path(args.checksums).write_text(''.join(f'{sha256(p)}  {p.name}\n' for p in archives))
+    source = json.loads(Path('third_party/codex-candy-eval/source.json').read_text())
+    notes = (f"{os.environ.get('TAG_MESSAGE', '').strip()}\n\n"
+             f"Host version: `{host_version}`\n\n"
+             f"Source commit: `{os.environ['RELEASE_SHA']}`\n\n"
+             f"Candy Eval source: {source['repository']}/commit/{source['commit']}\n\n"
+             f"Image: `ghcr.io/{os.environ['GITHUB_REPOSITORY'].split('/')[0].lower()}/sub2api:{version}`\n")
+    Path(args.output).write_text(notes.lstrip())
 
 
 def main():
@@ -173,6 +209,10 @@ def main():
     for arg in ('version', 'sha', 'goos', 'goarch', 'output'):
         p.add_argument('--' + arg, required=True)
     p.set_defaults(run=collect)
+    p = commands.add_parser('custom-notes')
+    p.add_argument('--output', required=True)
+    p.add_argument('--checksums', required=True)
+    p.set_defaults(run=custom_notes)
     for command, handler in [('verify', verify), ('contexts', contexts)]:
         p = commands.add_parser(command)
         for arg in ('version', 'sha', 'input'):

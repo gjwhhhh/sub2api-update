@@ -43,6 +43,7 @@ archives:
       - LICENSE*
       - README*
       - deploy/*
+      - third_party/**/*
 
 checksum:
   name_template: 'checksums.txt'
@@ -64,6 +65,7 @@ dockers:
     dockerfile: Dockerfile.goreleaser
     use: buildx
     extra_files:
+      - third_party
       - deploy/docker-entrypoint.sh
       - backend/resources
     build_flag_templates:
@@ -80,6 +82,7 @@ dockers:
     dockerfile: Dockerfile.goreleaser
     use: buildx
     extra_files:
+      - third_party
       - deploy/docker-entrypoint.sh
       - backend/resources
     build_flag_templates:
@@ -96,6 +99,7 @@ dockers:
     dockerfile: Dockerfile.goreleaser
     use: buildx
     extra_files:
+      - third_party
       - deploy/docker-entrypoint.sh
       - backend/resources
     build_flag_templates:
@@ -112,6 +116,7 @@ dockers:
     dockerfile: Dockerfile.goreleaser
     use: buildx
     extra_files:
+      - third_party
       - deploy/docker-entrypoint.sh
       - backend/resources
     build_flag_templates:
