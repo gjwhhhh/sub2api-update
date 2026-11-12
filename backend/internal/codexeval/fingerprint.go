@@ -50,6 +50,8 @@ var fingerprintSuite = func() []fingerprintChallenge {
 	return suite
 }()
 
+var selectFingerprintChallenges = fingerprintChallenges
+
 func fingerprintChallenges() []fingerprintChallenge {
 	challenges := make([]fingerprintChallenge, fingerprintTarget)
 	for i, j := range rand.Perm(len(fingerprintSuite))[:fingerprintTarget] {
@@ -155,7 +157,7 @@ func runFingerprintChecked(ctx context.Context, auth credential, model string, p
 		fingerprintResults[auth.ID] = appendRecent(fingerprintResults[auth.ID], r)
 		_ = saveStateLocked()
 	}()
-	challenges := fingerprintChallenges()
+	challenges := selectFingerprintChallenges()
 	type event struct {
 		index  int
 		sample fingerprintSample

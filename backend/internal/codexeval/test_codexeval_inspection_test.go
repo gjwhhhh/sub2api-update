@@ -426,6 +426,11 @@ func TestCodexInspectionCandySelection(t *testing.T) {
 }
 
 func TestCodexInspectionFingerprintModeAndWildcards(t *testing.T) {
+ // Recovery compares the same mock answers to the same challenge environments.
+ // Randomly choosing different expected counts changes attribution between runs.
+ oldSelect := selectFingerprintChallenges
+ selectFingerprintChallenges = func() []fingerprintChallenge { return fingerprintSuite[:fingerprintTarget] }
+ t.Cleanup(func() { selectFingerprintChallenges = oldSelect })
 	oldDelay := retryDelay
 	retryDelay = time.Millisecond
 	t.Cleanup(func() { retryDelay = oldDelay })
