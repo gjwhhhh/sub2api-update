@@ -6,6 +6,13 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 )
 
+// HTTPUpstreamRequestError preserves an error from an actual transport attempt.
+type HTTPUpstreamRequestError struct{ Err error }
+
+func (e *HTTPUpstreamRequestError) Error() string          { return e.Err.Error() }
+func (e *HTTPUpstreamRequestError) Unwrap() error          { return e.Err }
+func (e *HTTPUpstreamRequestError) RequestAttempted() bool { return true }
+
 // HTTPUpstream 上游 HTTP 请求接口
 // 用于向上游 API（Claude、OpenAI、Gemini 等）发送请求
 type HTTPUpstream interface {

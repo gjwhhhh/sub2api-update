@@ -16,6 +16,7 @@ import (
 	"time"
 
 	_ "github.com/Wei-Shaw/sub2api/ent/runtime"
+	"github.com/Wei-Shaw/sub2api/internal/codexeval"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -183,6 +184,7 @@ func runMainServer() {
 	<-quit
 
 	log.Println("Shutting down server...")
+	codexeval.StopInspection()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

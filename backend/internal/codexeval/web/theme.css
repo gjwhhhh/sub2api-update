@@ -1,0 +1,52 @@
+/* Tokens
+   Components read only these tokens. The panel embedding the page supplies most of them below; data-theme
+   mirrors that panel's theme. */
+:root {
+  --premium-ink: #6b4b00; --premium-line: rgb(217 165 22 / 72%); --premium-glow: 0 1px 3px rgb(133 92 0 / 16%), 0 0 10px rgb(255 214 98 / 28%);
+  --premium-soft: radial-gradient(circle at 18% 24%, rgb(255 255 255 / 96%), rgb(255 255 255 / 0) 42%), linear-gradient(135deg, #fff9e3, #ffe07f 52%, #e0aa14);
+  --plus-ink: #2463b0; --plus-soft: #eaf2fd; --plus-line: #c8dcf6; --go-ink: #0e7773; --go-soft: #e3f5f3; --go-line: #bfe5e0;
+  --business-ink: #6b46c1; --business-soft: #f2edfc; --business-line: #dcd0f5;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --premium-ink: #fff0a8; --premium-line: rgb(226 180 50 / 70%); --premium-glow: 0 1px 6px rgb(0 0 0 / 28%), 0 0 12px rgb(255 196 44 / 22%);
+  --premium-soft: radial-gradient(circle at 18% 24%, rgb(255 229 138 / 32%), rgb(255 214 98 / 0) 44%), linear-gradient(135deg, #4f3d0b, #6e5510 48%, #8f6d10);
+  --plus-ink: #93c1f7; --plus-soft: #16283d; --plus-line: #2a4868; --go-ink: #7fd6cf; --go-soft: #112f2d; --go-line: #245450;
+  --business-ink: #c4b0f5; --business-soft: #251e3a; --business-line: #45386b;
+  color-scheme: dark;
+}
+
+/* Native Sub2API light/dark colors; original component layout and plan badges. */
+:root {
+  --page-top: 24px; --page-inline: clamp(20px, 3vw, 48px); --section-gap: 24px;
+  --bg: #f9fafb; --bg-image: none; --surface: #fff; --sunken: #f3f4f6; --field: #fff;
+  --line: #e5e7eb; --card-line: var(--line); --ink: #111827; --muted: #6b7280; --faint: #9ca3af;
+  --control-bg: var(--surface); --control-line: #d1d5db; --control-hover: var(--sunken); --control-hover-line: #9ca3af;
+  --history-bg: var(--bg); --history-head-bg: var(--sunken);
+  --tag-neutral-bg: var(--sunken); --tag-neutral-ink: var(--muted); --tag-neutral-line: var(--line);
+  --accent: #14b8a6; --accent-ink: #0d9488; --accent-soft: rgb(20 184 166 / 10%);
+  --accent-soft-hover: rgb(20 184 166 / 16%); --action-line: rgb(20 184 166 / 30%);
+  --success: #10b981; --success-ink: #065f46; --success-soft: #d1fae5;
+  --danger: #ef4444; --danger-ink: #b91c1c; --danger-soft: rgb(239 68 68 / 10%);
+  --danger-soft-hover: rgb(239 68 68 / 18%); --danger-line: rgb(239 68 68 / 30%);
+  --warning-ink: #92400e; --warning-soft: rgb(245 158 11 / 10%); --warning-line: rgb(245 158 11 / 30%);
+  --radius: 12px; --shadow: 0 1px 3px rgb(0 0 0 / 4%), 0 1px 2px rgb(0 0 0 / 6%);
+  --float: 0 12px 26px rgb(0 0 0 / 14%); --glass: none;
+  --tip-bg: #111827; --tip-ink: #f9fafb; --tip-line: transparent;
+  --tip-shadow: var(--float); --tip-radius: 10px; --tip-padding: 9px 12px;
+  --popover-bg: var(--surface); --popover-line: var(--line); --popover-shadow: var(--float); --dialog-bg: var(--surface);
+}
+:root[data-theme="dark"] {
+  --bg: #0f172a; --surface: #1e293b; --sunken: #334155; --field: #0f172a;
+  --line: #334155; --ink: #f1f5f9; --muted: #94a3b8; --faint: #64748b;
+  --control-line: #475569; --control-hover-line: #64748b;
+  --accent: #2dd4bf; --accent-ink: #5eead4;
+  --success-ink: #6ee7b7; --success-soft: rgb(6 78 59 / 30%);
+  --danger-ink: #fca5a5; --danger-soft: rgb(239 68 68 / 20%); --danger-soft-hover: rgb(239 68 68 / 30%);
+  --warning-ink: #fcd34d; --warning-soft: rgb(245 158 11 / 14%);
+  --shadow: 0 1px 3px rgb(0 0 0 / 30%); --float: 0 14px 30px rgb(0 0 0 / 40%);
+  --tip-bg: #334155; --tip-ink: #f1f5f9; --tip-line: #475569;
+}
+@media (max-width: 768px) {
+  :root { --page-inline: 16px; }
+}

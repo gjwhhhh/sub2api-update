@@ -133,6 +133,10 @@ deploy/docker-compose.override.yml
 .gocache/
 vite.config.js
 docs/*
+!docs/research/
+docs/research/*
+!docs/research/codex-candy-eval-migration.md
+!docs/research/codex-candy-eval-maintenance.md
 !docs/agent-resource-safety.md
 !docs/moego-json-batching.md
 !docs/admin-api-keys.md

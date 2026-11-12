@@ -549,6 +549,17 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/codex-eval',
+    name: 'AdminCodexEval',
+    component: () => import('@/views/admin/CodexEvalView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Account Evaluation',
+      titleKey: 'nav.accountEvaluation'
+    }
+  },
+  {
     path: '/admin/plugins',
     name: 'AdminPlugins',
     component: () => import('@/views/admin/PluginsView.vue'),

@@ -47,6 +47,15 @@ func RegisterAdminRoutes(
 
 		// 账号管理
 		registerAccountRoutes(admin, h, stepUpAuth)
+		eval := admin.Group("/codex-eval")
+		eval.GET("/state", h.Admin.Account.CodexEvalState)
+		eval.POST("/start", h.Admin.Account.CodexEvalStart)
+		eval.POST("/cancel", h.Admin.Account.CodexEvalCancel)
+		eval.GET("/records/:type/:account_id/:record_id", h.Admin.Account.CodexEvalRecord)
+		eval.POST("/clear-history", h.Admin.Account.CodexEvalClear)
+		eval.GET("/inspection/state", h.Admin.Account.CodexInspectionState)
+		eval.POST("/inspection/start", h.Admin.Account.CodexInspectionStart)
+		eval.POST("/inspection/stop", h.Admin.Account.CodexInspectionStop)
 
 		// 公告管理
 		registerAnnouncementRoutes(admin, h)
@@ -396,6 +405,9 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 		accounts.POST("/:id/opencode-go-usage/refresh", h.Admin.Account.RefreshOpenCodeGoUsage)
 		accounts.DELETE("/:id", h.Admin.Account.Delete)
 		accounts.POST("/:id/test", h.Admin.Account.Test)
+		accounts.POST("/:id/codex-eval", h.Admin.Account.CodexEval)
+		accounts.GET("/:id/codex-eval/models", h.Admin.Account.CodexEvalModels)
+		accounts.PUT("/:id/codex-eval-inspection", h.Admin.Account.UpdateCodexInspectionAccount)
 		accounts.POST("/:id/recover-state", h.Admin.Account.RecoverState)
 		accounts.POST("/:id/refresh", h.Admin.Account.Refresh)
 		accounts.POST("/:id/apply-oauth-credentials", h.Admin.Account.ApplyOAuthCredentials)
@@ -575,6 +587,8 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpA
 	{
 		adminSettings.GET("", h.Admin.Setting.GetSettings)
 		adminSettings.PUT("", h.Admin.Setting.UpdateSettings)
+		adminSettings.GET("/codex-eval-inspection", h.Admin.Setting.GetCodexInspectionSettings)
+		adminSettings.PUT("/codex-eval-inspection", h.Admin.Setting.UpdateCodexInspectionSettings)
 		adminSettings.POST("/test-smtp", h.Admin.Setting.TestSMTPConnection)
 		adminSettings.POST("/send-test-email", h.Admin.Setting.SendTestEmail)
 		adminSettings.GET("/email-templates", h.Admin.Setting.ListEmailTemplates)

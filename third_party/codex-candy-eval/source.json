@@ -1,0 +1,14 @@
+{
+  "repository": "https://github.com/Nanboom233/codex-candy-eval",
+  "commit": "bae76a3533536688afce550458ec7ec2ab307342",
+  "host_tag": "v0.2.21",
+  "patches": {
+    "0001-evaluation-core.patch": "91880a342a5995a828e574fb239f44a1bac858bd19ef182f08145a0b8d4ff7dc",
+    "0002-evaluation-data.patch": "7d3621c4f439a4ffe413fc3f9f2a39647512e8a0939a9ae540ae89f5e98676c6",
+    "0003-vendor-assets.patch": "8cfc140627023f636b12c574dc466681e3eae02e303d46062a259fdb5b136a0d",
+    "0004-admin-channel.patch": "5b94356d0f629cdf0ceb54412aedfc4536171d9b1b9f594e8d6296c12acded81",
+    "0005-inspection.patch": "2ffa9530cc60f5316039e4e286c508c27fb47bbcb5eed6b90b7cea83b9e6120e",
+    "0006-evaluation-ui.patch": "2827b76c313349ba91d7d11602a00cfe01b45da27487dbf4f6445f5480257677",
+    "0007-sub2api-integration.patch": "622f551736d4e02688bad9b5d6ce6ec315cac7113ad745545f4b1197ae7802aa"
+  }
+}

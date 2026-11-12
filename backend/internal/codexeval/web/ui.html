@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="zh-CN">
+<!--FINGERPRINT_LICENSE-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Codex 降智测试</title>
+  <style>/*APP_STYLES*/</style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1><i data-icon="candy"></i>Codex 降智测试</h1>
+    </header>
+
+    <section id="login" class="card login" hidden><p id="login-error" class="error" hidden></p></section>
+
+    <div id="app" hidden>
+      <div class="page-navigation card">
+        <div class="tabs" role="tablist" aria-label="测试类型">
+          <button id="tab-candy" class="tab" role="tab" aria-selected="true" aria-controls="candy-panel" type="button">糖果</button>
+          <button id="tab-fingerprint" class="tab" role="tab" aria-selected="false" aria-controls="fingerprint-panel" tabindex="-1" type="button">指纹</button>
+          <button id="tab-pelican" class="tab" role="tab" aria-selected="false" aria-controls="pelican-panel" tabindex="-1" type="button">鹈鹕</button>
+          <button id="tab-siwc" class="tab" role="tab" aria-selected="false" aria-controls="siwc-panel" tabindex="-1" type="button">SIWC</button>
+          <button id="tab-settings" class="tab" role="tab" aria-selected="false" aria-controls="settings-panel" tabindex="-1" type="button">设置</button>
+        </div>
+        <div class="page-actions">
+          <button id="clear-all" type="button" aria-label="清空全部测试记录" data-tip disabled><i data-icon="trash-2"></i></button>
+          <button id="refresh" type="button" aria-label="刷新账户和模型" data-tip aria-busy="false"><i data-icon="rotate-cw"></i></button>
+        </div>
+      </div>
+      <div id="notifications"></div>
+      <section id="candy-panel" role="tabpanel" aria-labelledby="tab-candy">
+        <div class="panel-intro">
+          <p>让模型解一道糖果题，答出 <b class="mono">21</b> 即为正确。</p>
+          <details class="problem">
+            <summary><i data-icon="chevron-right" data-class="chev"></i>查看题目</summary>
+            <div class="problem-body"><pre class="mono"><code><!--CANDY_PROMPT--></code></pre>
+              <button class="copy-btn" type="button" aria-label="复制题目" data-tip></button>
+            </div>
+          </details>
+        </div>
+        <form id="toolbar" class="card toolbar">
+          <label class="field"><span class="field-label">分组</span><span class="native-select"><select id="group" data-group-select></select></span></label>
+          <div class="field"><label class="field-label" for="model-select">模型</label><span class="native-select"><select id="model-select"></select></span><input id="model" maxlength="200" required aria-label="自定义模型" hidden></div>
+          <label class="field"><span class="field-label">推理强度</span><span class="native-select"><select id="effort"></select></span></label>
+          <label class="field"><span class="field-label">每账户次数</span><input id="runs" class="mono" type="number" min="1" max="10" step="1" value="1" required></label>
+          <button id="run-batch" class="btn" type="submit" disabled>测试全部</button>
+        </form>
+
+        <div class="legend">
+          <span><i data-icon="circle-check" data-class="mark ok"></i>答对</span>
+          <span><i data-icon="circle-x" data-class="mark bad"></i>答错</span>
+          <span><i data-icon="circle-alert" data-class="mark err"></i>请求出错</span>
+          <span><i data-icon="ban" data-class="mark err"></i>已跳过</span>
+          <span><i data-icon="circle-check" data-class="mark ok dim"></i>其他模型或推理强度</span>
+          <span id="rate-scope"></span>
+        </div>
+
+        <section id="candy-credentials" class="card"></section>
+      </section>
+      <section id="fingerprint-panel" role="tabpanel" aria-labelledby="tab-fingerprint" hidden>
+        <form id="fp-toolbar" class="card toolbar">
+          <label class="field"><span class="field-label">分组</span><span class="native-select"><select id="fp-group" data-group-select></select></span></label>
+          <div class="field"><label class="field-label" for="fp-model-select">模型</label><span class="native-select"><select id="fp-model-select"></select></span><input id="fp-model" maxlength="200" required aria-label="自定义模型" hidden></div>
+          <label class="field"><span class="field-label">每账户并发</span><input id="fp-concurrency" class="mono" type="number" min="1" step="1" required></label>
+          <button id="fp-run-batch" class="btn" type="submit" disabled>测试全部</button>
+        </form>
+        <section id="fp-credentials" class="card"></section>
+      </section>
+      <section id="pelican-panel" role="tabpanel" aria-labelledby="tab-pelican" hidden>
+        <div class="panel-intro">
+          <p>让模型用 SVG 绘制鹈鹕画面，可选择原版动画或多合一场景。</p>
+          <details class="problem">
+            <summary><i data-icon="chevron-right" data-class="chev"></i>查看题目</summary>
+            <div class="problem-body"><pre class="mono"><code id="pl-prompt"></code></pre>
+              <button class="copy-btn" type="button" aria-label="复制题目" data-tip></button>
+            </div>
+          </details>
+        </div>
+        <form id="pl-toolbar" class="card toolbar">
+          <label class="field"><span class="field-label">分组</span><span class="native-select"><select id="pl-group" data-group-select></select></span></label>
+          <div class="field"><label class="field-label" for="pl-model-select">模型</label><span class="native-select"><select id="pl-model-select"></select></span><input id="pl-model" maxlength="200" required aria-label="自定义模型" hidden></div>
+          <label class="field"><span class="field-label">推理强度</span><span class="native-select"><select id="pl-effort"></select></span></label>
+          <label class="field"><span class="field-label">版本</span><span class="native-select"><select id="pl-variant"></select></span></label>
+          <button id="pl-run-batch" class="btn" type="submit" disabled>测试全部</button>
+        </form>
+        <section id="pl-credentials" class="card"></section>
+      </section>
+      <section id="siwc-panel" role="tabpanel" aria-labelledby="tab-siwc" hidden>
+        <div class="panel-intro">
+          <p>据社区反馈，部分受风控账号在使用 SIWC 时会返回 403 错误。检测结果可作为判断账号是否受到风控的参考。</p>
+        </div>
+        <form id="siwc-toolbar" class="card toolbar">
+          <label class="field"><span class="field-label">分组</span><span class="native-select"><select id="siwc-group" data-group-select></select></span></label>
+          <div class="field"><label class="field-label" for="siwc-model-select">模型</label><span class="native-select"><select id="siwc-model-select"></select></span><input id="siwc-model" maxlength="200" required aria-label="自定义模型" hidden></div>
+          <button id="siwc-run-batch" class="btn" type="submit" disabled>检测全部</button>
+        </form>
+        <div class="legend"><span>每个账户 1 次简短请求，插件不重试。</span></div>
+        <section id="siwc-credentials" class="card"></section>
+      </section>
+      <section id="settings-panel" role="tabpanel" aria-labelledby="tab-settings" hidden>
+        <form id="inspection-settings" class="inspection-settings" aria-busy="false">
+          <section class="card settings-card">
+            <div class="settings-card-header"><h2>自动巡检</h2><label class="switch"><input id="inspection-enabled" type="checkbox" role="switch" aria-label="自动巡检" aria-controls="inspection-auto-fields"></label></div>
+            <div id="inspection-auto-fields" class="settings-card-body" hidden>
+              <div class="settings-grid">
+                <div class="field"><label for="inspection-model-select">模型</label><span class="native-select"><select id="inspection-model-select"></select></span><input id="inspection-model" name="model" maxlength="200" required aria-label="自定义巡检模型" hidden></div>
+                <div class="settings-grid">
+                  <label class="field"><span>推理强度</span><span class="native-select"><select name="effort"></select></span></label>
+                  <label class="field"><span>检查方式</span><span class="native-select"><select name="test_type"><option value="candy">糖果</option><option value="fingerprint">指纹</option></select></span></label>
+                </div>
+                <label class="field"><span>每账户最多测试次数</span><input name="max_tests_per_account" type="number" min="1" max="10" step="1" required></label>
+                <div class="settings-grid">
+                  <label class="field"><span>最短等待（分钟）</span><input name="min_wait_minutes" type="number" min="1" step="1" required></label>
+                  <label class="field"><span>最长等待（分钟）</span><input name="max_wait_minutes" type="number" min="1" step="1" required></label>
+                </div>
+                <label class="field"><span>包含账户通配符（INCLUDE）</span><input name="include_patterns" placeholder="例如 codex-*, *@example.com"></label>
+                <label class="field"><span>排除账户通配符（EXCLUDE）</span><input name="exclude_patterns" placeholder="例如 test-*, *-backup"></label>
+              </div>
+            </div>
+          </section>
+          <section class="card settings-card">
+            <div class="settings-card-header"><h2>优先级</h2><label class="switch"><input name="adjust_priority" type="checkbox" role="switch" aria-label="自动调整优先级" aria-controls="inspection-priority-fields"></label></div>
+            <div id="inspection-priority-fields" class="settings-card-body settings-grid" hidden>
+              <label class="field"><span>正常优先级</span><input name="normal_priority" type="number" min="1" step="1" value="10" required></label>
+              <label class="field"><span>降级优先级</span><input name="degraded_priority" type="number" step="1" value="99" required></label>
+            </div>
+          </section>
+          <section class="card settings-card">
+            <div class="settings-card-header"><h2>模型控制</h2><label class="switch"><input name="control_models" type="checkbox" role="switch" aria-label="模型控制" aria-controls="inspection-model-fields"></label></div>
+            <div id="inspection-model-fields" class="settings-card-body" hidden>
+              <div class="field"><label for="inspection-model-trigger">降级移除模型</label>
+                <input name="degraded_remove_models" type="hidden" value="[]">
+                <div id="inspection-model-picker" class="model-picker">
+                  <div class="model-select">
+                    <div id="inspection-model-field" class="model-picker-field"><div id="inspection-model-tags" class="model-tags"></div>
+                      <button id="inspection-model-trigger" type="button" class="model-trigger" aria-label="选择模型" aria-expanded="false" aria-controls="inspection-model-dropdown"><span><span id="inspection-model-empty">选择模型</span></span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m19 9-7 7-7-7"/></svg></button>
+                    </div>
+                    <div id="inspection-model-dropdown" class="model-dropdown" hidden><div class="model-search"><input id="inspection-model-search" placeholder="搜索模型" aria-label="搜索模型"></div><div id="inspection-model-options" class="model-options"></div></div>
+                  </div>
+                  <div class="model-custom"><label for="inspection-model-custom">自定义模型名称</label><div class="model-custom-row"><input id="inspection-model-custom" maxlength="200" placeholder="输入自定义模型名称"><button id="inspection-model-add" type="button" class="model-add">填入</button></div></div>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section class="card settings-card">
+            <div class="settings-card-header"><h2>通知</h2><label class="switch"><input name="notify_enabled" type="checkbox" role="switch" aria-label="通知" aria-controls="inspection-notification-fields"></label></div>
+            <div id="inspection-notification-fields" class="settings-card-body settings-grid">
+              <label class="field"><span>ntfy 服务器</span><input name="ntfy_server" type="url"></label>
+              <label class="field"><span>ntfy 主题</span><input name="ntfy_topic"></label>
+              <label class="field"><span>ntfy 用户名</span><input name="ntfy_username" autocomplete="off"></label>
+              <label class="field"><span>ntfy 密码或访问令牌</span><input name="ntfy_password" type="password" autocomplete="new-password"></label>
+              <label class="field settings-span"><span>Bark 推送地址</span><input name="bark_url" type="password" autocomplete="new-password"></label>
+            </div>
+          </section>
+          <div class="settings-save"><button id="inspection-start" type="button" class="btn ghost">立即巡检</button><button id="inspection-stop" type="button" class="btn ghost danger" disabled>停止当前巡检</button><span id="inspection-save-status" role="status"></span></div>
+        </form>
+      </section>
+    </div>
+
+    <dialog id="confirm-clear" class="confirm">
+      <form method="dialog">
+        <h2 id="clear-title">清空测试记录？</h2>
+        <p>此操作对所有账户生效，删除后无法恢复。正在进行的测试不受影响，完成后仍会保存结果。</p>
+        <div class="dialog-actions">
+          <button class="btn ghost" value="cancel" autofocus>取消</button>
+          <button class="btn danger" value="confirm">清空记录</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="fp-detail" class="result-dialog" aria-labelledby="fp-detail-title">
+      <div class="section-head result-dialog-head"><h2 id="fp-detail-title">指纹详情</h2><button id="fp-detail-close" class="btn ghost icon-button" type="button" aria-label="关闭详情"><i data-icon="x"></i></button></div>
+      <div id="fp-detail-body" class="result-dialog-body"></div>
+    </dialog>
+    <dialog id="pl-detail" class="result-dialog" aria-labelledby="pl-detail-title">
+      <div class="section-head result-dialog-head"><h2 id="pl-detail-title">鹈鹕画面</h2><button id="pl-detail-close" class="btn ghost icon-button" type="button" aria-label="关闭画面"><i data-icon="x"></i></button></div>
+      <div id="pl-detail-body" class="result-dialog-body"></div>
+    </dialog>
+    <dialog id="siwc-detail" class="result-dialog" aria-labelledby="siwc-detail-title">
+      <div class="section-head result-dialog-head"><h2 id="siwc-detail-title">SIWC 检测详情</h2><button id="siwc-detail-close" class="btn ghost icon-button" type="button" aria-label="关闭详情"><i data-icon="x"></i></button></div>
+      <div id="siwc-detail-body" class="result-dialog-body"></div>
+    </dialog>
+    <div id="tip" class="tip" role="tooltip" hidden></div>
+  </main>
+  <footer class="page-footer">
+    <span>© 2026 <a href="https://github.com/haowang02/cpa-plugin-codex-candy-eval" target="_blank" rel="noopener noreferrer">CPA Codex Candy Eval</a></span>
+    <span>&thinsp;·&thinsp;<a href="https://github.com/haowang02/cpa-plugin-codex-candy-eval/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT</a></span>
+    <span>&thinsp;·&thinsp;<a href="https://github.com/Wei-Shaw/sub2api/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">LGPL-3.0</a></span>
+    <span>&thinsp;·&thinsp;版本 v<!--PLUGIN_VERSION--></span>
+  </footer>
+
+  <script>/*MARKDOWN_SCRIPT*/</script>
+  <script>/*CJK_FRIENDLY_SCRIPT*/</script>
+  <script>/*TEXMATH_SCRIPT*/</script>
+  <script>/*TEMML_SCRIPT*/</script>
+
+  <script>/*STORAGE_SCRIPT*/</script>
+  <script>/*CREDENTIALS_SCRIPT*/</script>
+  <script>/*CATALOG_SCRIPT*/</script>
+  <script>/*COMPONENTS_SCRIPT*/</script>
+  <script>/*CANDY_SCRIPT*/</script>
+  <script>/*SIWC_SCRIPT*/</script>
+  <script>/*FINGERPRINT_SCRIPT*/</script>
+  <script>/*PELICAN_SCRIPT*/</script>
+  <script>/*INSPECTION_SCRIPT*/</script>
+  <script>/*APP_SCRIPT*/</script>
+</body>
+</html>

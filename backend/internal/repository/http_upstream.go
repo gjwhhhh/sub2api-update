@@ -315,7 +315,7 @@ func doUpstreamRequest(client *http.Client, req *http.Request, drainTimeouts ...
 	resp, err := servertiming.Do(client, req.WithContext(ctx))
 	if err != nil {
 		cancel()
-		return resp, err
+		return resp, &service.HTTPUpstreamRequestError{Err: err}
 	}
 	decompressResponseBody(resp)
 	resp.Body = &cancelOnCloseBody{ReadCloser: resp.Body, cancel: cancel}

@@ -692,6 +692,9 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		delete(normalizedExtra, UpstreamModelMetadataExtraKey)
 		// 保留配额用量和专用服务受管字段，防止普通账号编辑意外覆盖。
 		for _, key := range []string{
+			"codex_eval_inspection_enabled",
+			"codex_eval_inspection_verdict",
+			"codex_eval_inspection_removed_models",
 			"quota_used",
 			"quota_daily_used",
 			"quota_daily_start",

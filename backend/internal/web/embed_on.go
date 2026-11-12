@@ -353,6 +353,9 @@ func tryServeOverrideFile(c *gin.Context, overrideDir, cleanPath string) bool {
 }
 
 func shouldBypassEmbeddedFrontend(path string) bool {
+	if path == "/codex-eval" || path == "/codex-eval/" {
+		return true
+	}
 	trimmed := strings.TrimSpace(path)
 	return strings.HasPrefix(trimmed, "/api/") ||
 		trimmed == "/.well-known/oauth-protected-resource" ||
