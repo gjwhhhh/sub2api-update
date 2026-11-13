@@ -1,6 +1,35 @@
 # Codex Candy Eval 定制分支维护手册
 
-更新日期：2026-11-13。适用于长期分支 `custom`。目前分支从 Sub2API `v0.2.21`（`10ba8f9b4dc2e6023d4a9879ab77b21841babd10`）迁入 Candy Eval commit `bae76a3533536688afce550458ec7ec2ab307342`。本地 `origin` 仍指向公共上游；推送和发布前要先配置自有仓库。
+更新日期：2026-11-13。适用于长期分支 `custom`。目前分支从 Sub2API `v0.2.21`（`10ba8f9b4dc2e6023d4a9879ab77b21841babd10`）迁入 Candy Eval commit `bae76a3533536688afce550458ec7ec2ab307342`。自有仓库为 `gjwhhhh/sub2api-update`；`origin` 指向自有仓库，`upstream` 指向 `Wei-Shaw/sub2api`。自有仓库默认分支为 `custom`，本地同名分支跟踪 `origin/custom`。
+
+## 远程仓库与流水线配置
+
+- `origin`：`git@github.com:gjwhhhh/sub2api-update.git`，用于定制代码备份、CI 和发布。
+- `upstream`：`https://github.com/Wei-Shaw/sub2api.git`，用于获取官方 tag 和合并升级。
+- Actions 和 Release workflow 已启用。仓库变量 `SIMPLE_RELEASE=false`，保留五个系统/架构的安装包及两个 Linux 架构的镜像。
+- workflow 的 release job 单独声明 `contents: write`、`packages: write`，使用 GitHub 自动提供的 `GITHUB_TOKEN`；无需额外保存个人 Token，也无需扩大所有 workflow 的默认权限。
+- GHCR 镜像路径为 `ghcr.io/gjwhhhh/sub2api`，由发布 helper 固定使用镜像名 `sub2api`，与仓库名 `sub2api-update` 不同。Docker Hub 和 Telegram 凭证未配置，因此对应发布/通知步骤会跳过。
+
+先推送分支，再手动执行不发布的完整打包验证：
+
+```sh
+git push origin custom
+gh workflow run release.yml --repo gjwhhhh/sub2api-update --ref custom \
+  -f tag=custom -f dry_run=true -f simple_release=false
+gh run list --repo gjwhhhh/sub2api-update --workflow release.yml
+```
+
+确认选定提交和 CI 后，推送对应的定制 tag 会真正发布 GitHub Release 与 GHCR 镜像。例如本地已有 `custom-v0.2.21.1`，固定指向 `03f87b3676ed173ad9dbff0e1850e71d1edd9bb8`：
+
+```sh
+git push origin custom-v0.2.21.1
+```
+
+本次远程配置只推送 `custom` 分支并执行 dry-run，未推送发布 tag。后续修复使用新提交和新 revision；不移动已有 tag。dry-run 验证打包和镜像构建，不执行镜像推送、Release 创建，也不能代替真实发布权限的验证。
+
+2026-11-13 首次完整 dry-run 已通过：[运行 43376509485](https://github.com/gjwhhhh/sub2api-update/actions/runs/43376509485)，来源提交为 `03f87b3676ed173ad9dbff0e1850e71d1edd9bb8`。前端构建、Linux/macOS 的 amd64/arm64、Windows amd64 共五个安装包、制品来源和校验和检查，以及两个 Linux 架构的 Docker 镜像构建均成功。安装包可从该运行的 `release-binary-*` Artifacts 下载；当前保留期为 1 天，dry-run 报告保留 3 天。长期下载需正式发布 Release。
+
+首次远程安全扫描（运行编号 `43376518624`）报告 Go 标准库漏洞 `GO-2026-6859`，当前 `go1.27.3` 的 `net/http` 受影响，修复版本为 `go1.27.4`。正式发布前需同步更新宿主工具链、CI 版本断言和相关构建配置，并重新验证。该发现与仓库连接、Actions 权限和打包触发配置分开记录；本次配置没有屏蔽安全扫描或降低检测标准。
 
 ## 分清两条更新线
 

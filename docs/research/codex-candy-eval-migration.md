@@ -1,6 +1,6 @@
 # Codex Candy Eval 独立功能模块迁移方案
 
-更新日期：2026-11-13。状态：源码迁移与模块化已在长期分支 `custom` 实施；本文记录实施结果、验证状态和后续维护方式。尚未推送到自有仓库，也未进行真实账户烟测、部署或发布。
+更新日期：2026-11-13。状态：源码迁移与模块化已在长期分支 `custom` 实施，并已推送到自有仓库 `gjwhhhh/sub2api-update`；本文记录实施结果、验证状态和后续维护方式。尚未进行真实账户烟测、部署或正式发布。
 
 上游升级、自定义开发、定制发布和回退步骤见[维护手册](codex-candy-eval-maintenance.md)。
 
@@ -152,11 +152,11 @@ UI 直接读取同源 `localStorage.auth_token`，不是官方插件 UI Bridge�
 长期主线为 `custom`，从 v0.2.21 建立。本次迁移已直接在此分支承载，后续插件改进、自定义业务功能、兼容修复和上游版本更新最终都汇入该分支；不再先建立迁移临时分支、迁移后另选主线。
 
 - `main`：保留上游原版基线，不提交自定义业务代码；其更新不自动替代定制版本。
-- `custom`：本地长期定制开发与交付主线，不按插件或上游版本重新创建，不通过 reset 到上游 tag 的方式升级。当前尚未推送到自有远程。
+- `custom`：长期定制开发与交付主线，不按插件或上游版本重新创建，不通过 reset 到上游 tag 的方式升级。已推送到自有远程，并设为自有仓库默认分支。
 - 可选验证分支：较大改动或上游升级需要隔离验证时，从 `custom` 创建短期分支；通过验证后合回 `custom`，它们不承担长期交付职责。日常定制可直接在长期主线上推进。
 - 发布 tag：从已验证的 `custom` 提交创建独立命名的定制 tag，例如 `custom-v0.2.21.1`，对应固定镜像/二进制。部署引用已验证的发布版本，而不是自动跟随分支最新提交。
 
-当前 `origin` 指向公共上游 `Wei-Shaw/sub2api`，本次没有推送。配置自有 fork/仓库作为定制分支推送目标，并保留公共上游拉取入口后，令 `custom` 跟踪自有仓库同名分支，不跟踪公共上游 `main`。自有远程仓库地址尚未确定；这不阻塞本地源码迁移，但远程备份、CI 和发布依赖该配置。
+当前 `origin` 指向自有 fork `gjwhhhh/sub2api-update`，公共上游 `Wei-Shaw/sub2api` 保留为 `upstream`。本地 `custom` 跟踪 `origin/custom`，默认 push 目标为 `origin`。Actions 已启用，`SIMPLE_RELEASE=false`，发布 job 使用 GitHub 自动提供的 Token 及显式写权限。发布 tag 目前仅在本地，未推送；远程配置和后续操作见维护手册。
 
 长期分支通过 merge 保留上游与自定义历史；已共享的主线不做 rebase 或强推改写。
 
@@ -181,7 +181,7 @@ UI 直接读取同源 `localStorage.auth_token`，不是官方插件 UI Bridge�
 
 现有 `.github/workflows/backend-ci.yml` 的 push/PR 未限制分支，可覆盖 `custom`；迁入的 Go/JS 测试与 fixtures 已接入测试执行。新增生命周期测试覆盖任务取消和停止，可对相关包运行 race 检查。
 
-`.github/workflows/release.yml` 已增加 `custom-vX.Y.Z.N` 发布入口。发布 helper 将它映射为制品/镜像版本 `X.Y.Z-custom.N` 与服务器 SemVer `X.Y.Z+custom.N`，并将镜像别名设为 `custom-latest`，避免覆盖上游 `latest`；定制构建也会屏蔽内置官方自更新与回退入口。发布目标取运行 workflow 的仓库命名空间，因此只应在自有仓库设置好凭证后推送定制 tag。当前只完成本地配置与 helper 测试，没有执行真实发布或 workflow dry-run。
+`.github/workflows/release.yml` 已增加 `custom-vX.Y.Z.N` 发布入口。发布 helper 将它映射为制品/镜像版本 `X.Y.Z-custom.N` 与服务器 SemVer `X.Y.Z+custom.N`，并将镜像别名设为 `custom-latest`，避免覆盖上游 `latest`；定制构建也会屏蔽内置官方自更新与回退入口。发布目标取运行 workflow 的仓库命名空间。自有仓库已配置，首次完整 workflow dry-run 已通过（运行编号 `43376509485`），五个安装包及两个 Linux 架构的镜像构建均成功；尚未执行真实发布。该次推送同时触发的独立安全扫描发现 `go1.27.3` 的标准库漏洞 `GO-2026-6859`，修复版本为 `go1.27.4`；正式发布前仍需更新相关工具链并重新验证。
 
 源码迁移和代码级验证已完成；真实账户烟测、测试环境和生产部署是后续独立状态，需要可用环境及明确的目标账户。2026-11-13 复查 Docker Desktop 时引擎已可连接，已补跑 `go test -json -tags=integration -timeout=10m ./...`：54 个测试包通过，限流测试包首次因创建容器时找不到 `redis:8.4-alpine` 镜像失败。显式拉取指定 Redis/PostgreSQL 镜像后，`go test -tags=integration -timeout=5m ./internal/middleware` 补跑通过；最终 55 个测试包通过，另有 16 项用例/子测试按既有条件跳过（包括额外数据库/Redis 配置、外部服务或手动测试等）。这些跳过项不算验证通过。此前 Docker 不可用的具体原因未保留足够诊断信息，不能据此断言是 Desktop 未启动还是暂时连接失败。全量 `go test -tags=unit ./...` 中唯一失败是未改动的在途计费内存边界测试，实测堆增量超过 8 MiB 阈值；没有为迁移放宽该阈值。`golangci-lint run ./...` 首次发现两处错误字符串大小写问题，修正后通过。
 
@@ -207,4 +207,4 @@ UI 直接读取同源 `localStorage.auth_token`，不是官方插件 UI Bridge�
 
 长期分支 `custom` 已完成源码迁移、模块化、定制发布适配及本地代码审阅。定制 tag `custom-vX.Y.Z.N` 映射为 `X.Y.Z-custom.N` 制品/镜像和 `X.Y.Z+custom.N` 服务版本；发布 helper 已有回归测试。完整结果见上方阶段 C。
 
-仍需在后续远程交付或部署前完成：配置自有仓库、解决或确认在途计费内存测试的超限原因、按需要补齐集成测试跳过项的环境配置、确认部署拓扑，并用选定账户完成烟测。Docker 集成测试已在本机补跑，结果和保留限制见上文。当前 `origin` 仍指向公共上游；本次不包含推送、发布或部署。
+仍需在后续正式发布或部署前完成：更新 Go 工具链以处理安全扫描发现、解决或确认在途计费内存测试的超限原因、按需要补齐集成测试跳过项的环境配置、确认部署拓扑，并用选定账户完成烟测。Docker 集成测试已在本机补跑，结果和保留限制见上文。自有仓库和长期分支已配置并推送，远程完整打包 dry-run 已通过；发布 tag 未推送，本次远程配置不包含正式发布或部署。
