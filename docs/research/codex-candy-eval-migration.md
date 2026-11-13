@@ -181,7 +181,7 @@ UI 直接读取同源 `localStorage.auth_token`，不是官方插件 UI Bridge�
 
 现有 `.github/workflows/backend-ci.yml` 的 push/PR 未限制分支，可覆盖 `custom`；迁入的 Go/JS 测试与 fixtures 已接入测试执行。新增生命周期测试覆盖任务取消和停止，可对相关包运行 race 检查。
 
-`.github/workflows/release.yml` 已增加 `custom-vX.Y.Z.N` 发布入口。发布 helper 将它映射为制品/镜像版本 `X.Y.Z-custom.N` 与服务器 SemVer `X.Y.Z+custom.N`，并将镜像别名设为 `custom-latest`，避免覆盖上游 `latest`；定制构建也会屏蔽内置官方自更新与回退入口。发布目标取运行 workflow 的仓库命名空间。自有仓库已配置，首次完整 workflow dry-run 已通过（运行编号 `43376509485`），五个安装包及两个 Linux 架构的镜像构建均成功；尚未执行真实发布。该次推送同时触发的独立安全扫描发现 `go1.27.3` 的标准库漏洞 `GO-2026-6859`，修复版本为 `go1.27.4`；正式发布前仍需更新相关工具链并重新验证。
+`.github/workflows/release.yml` 已增加 `custom-vX.Y.Z.N` 发布入口。发布 helper 将它映射为制品/镜像版本 `X.Y.Z-custom.N` 与服务器 SemVer `X.Y.Z+custom.N`，并将镜像别名设为 `custom-latest`，避免覆盖上游 `latest`；定制构建也会屏蔽内置官方自更新与回退入口。发布目标取运行 workflow 的仓库命名空间。自有仓库完整 dry-run 已通过（运行编号 `43376509485`）。Go `1.27.4` 安全修复 revision 2 随后通过 CI 和安全扫描并已正式发布：tag `custom-v0.2.21.2`，Release 运行编号 `43385349452`。
 
 源码迁移和代码级验证已完成；真实账户烟测、测试环境和生产部署是后续独立状态，需要可用环境及明确的目标账户。2026-11-13 复查 Docker Desktop 时引擎已可连接，已补跑 `go test -json -tags=integration -timeout=10m ./...`：54 个测试包通过，限流测试包首次因创建容器时找不到 `redis:8.4-alpine` 镜像失败。显式拉取指定 Redis/PostgreSQL 镜像后，`go test -tags=integration -timeout=5m ./internal/middleware` 补跑通过；最终 55 个测试包通过，另有 16 项用例/子测试按既有条件跳过（包括额外数据库/Redis 配置、外部服务或手动测试等）。这些跳过项不算验证通过。此前 Docker 不可用的具体原因未保留足够诊断信息，不能据此断言是 Desktop 未启动还是暂时连接失败。全量 `go test -tags=unit ./...` 中唯一失败是未改动的在途计费内存边界测试，实测堆增量超过 8 MiB 阈值；没有为迁移放宽该阈值。`golangci-lint run ./...` 首次发现两处错误字符串大小写问题，修正后通过。
 
@@ -209,4 +209,4 @@ UI 直接读取同源 `localStorage.auth_token`，不是官方插件 UI Bridge�
 
 长期分支 `custom` 已完成源码迁移、模块化、定制发布适配及本地代码审阅。定制 tag `custom-vX.Y.Z.N` 映射为 `X.Y.Z-custom.N` 制品/镜像和 `X.Y.Z+custom.N` 服务版本；发布 helper 已有回归测试。完整结果见上方阶段 C。
 
-安全修复及内存 fixture 修正已完成，拟从 `custom` 发布 `custom-v0.2.21.2`；该版本不覆盖旧 tag。发布前执行升级后的 CI、安全扫描和正式打包流水线，发布结果以对应 Actions 运行及 Release 为准。部署前仍需按需要补齐集成测试跳过项的环境配置、确认单实例拓扑，并用选定账户完成烟测。源码发布不等于已部署或已完成真实账户验收。
+安全修复及内存 fixture 修正已完成并发布为 `custom-v0.2.21.2`，没有移动或覆盖旧 tag。Go `1.27.4` 下的 CI、govulncheck 与正式打包已通过。部署前仍需按需要补齐集成测试跳过项的环境配置、确认单实例拓扑，并用选定账户完成烟测。源码发布不等于已部署或已完成真实账户验收。

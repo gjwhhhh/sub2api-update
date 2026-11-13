@@ -19,19 +19,21 @@ gh workflow run release.yml --repo gjwhhhh/sub2api-update --ref custom \
 gh run list --repo gjwhhhh/sub2api-update --workflow release.yml
 ```
 
-确认选定提交和 CI 后，推送对应的定制 tag 会真正发布 GitHub Release 与 GHCR 镜像。安全修复版本使用 `custom-v0.2.21.2`（服务版本 `0.2.21+custom.2`，安装包/镜像版本 `0.2.21-custom.2`）：
+确认选定提交和 CI 后，推送对应的定制 tag 会真正发布 GitHub Release 与 GHCR 镜像。安全修复版本 `custom-v0.2.21.2`（服务版本 `0.2.21+custom.2`，安装包/镜像版本 `0.2.21-custom.2`）已发布：
 
 ```sh
 git push origin custom-v0.2.21.2
 ```
 
-初次远程配置只推送 `custom` 分支并执行 dry-run。旧本地 tag `custom-v0.2.21.1` 指向安全修复前提交，保留作历史记录，不用于发布。后续修复使用新提交和新 revision；不移动已有 tag。dry-run 验证打包和镜像构建，不执行镜像推送、Release 创建，也不能代替真实发布权限的验证。
+revision 1 的 dry-run 只验证构建，不发布。安全修复 revision 2 已通过 CI 和安全扫描后推送 tag，并完成正式发布。后续修复使用新提交和新 revision；不移动已有 tag。dry-run 验证打包和镜像构建，不执行镜像推送或 Release 创建。
 
 2026-11-13 首次完整 dry-run 已通过：[运行 43376509485](https://github.com/gjwhhhh/sub2api-update/actions/runs/43376509485)，来源提交为 `03f87b3676ed173ad9dbff0e1850e71d1edd9bb8`。前端构建、Linux/macOS 的 amd64/arm64、Windows amd64 共五个安装包、制品来源和校验和检查，以及两个 Linux 架构的 Docker 镜像构建均成功。安装包可从该运行的 `release-binary-*` Artifacts 下载；当前保留期为 1 天，dry-run 报告保留 3 天。长期下载需正式发布 Release。
 
 首次远程安全扫描（运行编号 `43376518624`）报告 Go 标准库漏洞 `GO-2026-6859`，`go1.27.3` 的 `net/http` 受影响，修复版本为 `go1.27.4`。定制 revision 2 已同步升级 `backend/go.mod`、三个 Docker 构建入口和 CI 版本断言至 Go `1.27.4`。本地 `govulncheck ./...` 已通过，未发现可达漏洞；另有 6 项依赖模块中的漏洞未被当前代码调用，仍保留扫描结果。没有屏蔽安全扫描或降低检测标准。
 
 同次发布预检修复了在途计费内存测试的 fixture：原 fixture 缺少生产构造函数会初始化的可复用费率解析器，每次估算会临时创建 go-cache 及清理 goroutine，堆快照显示增长主要来自这些 goroutine。测试现在复用解析器，并使用 `runtime.KeepAlive` 保持被测缓存存活到堆测量结束；原 8 MiB 阈值、20,000 次未定价请求、不查数据库和快照读取次数断言均保留。
+
+revision 2 的 GitHub Actions 发布已通过：[Release 运行 43385349452](https://github.com/gjwhhhh/sub2api-update/actions/runs/43385349452)。已创建 GitHub Release [custom-v0.2.21.2](https://github.com/gjwhhhh/sub2api-update/releases/tag/custom-v0.2.21.2)，上传五个平台安装包和 SHA256 文件，并发布多架构 GHCR 镜像。
 
 ## 分清两条更新线
 
