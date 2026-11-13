@@ -28,3 +28,5 @@ python -m pip install -r .github/release-tools/requirements-release.txt
 python -m unittest discover -s .github/release-tools -p 'test_release_matrix.py'
 bash -n .github/release-tools/release-images.sh
 ```
+
+Custom tags (`custom-vX.Y.Z.N`) automatically use simple mode: publish only the Linux amd64 GHCR image and omit downloadable archives. Ordinary upstream `vX.Y.Z` tags continue to use the full matrix unless simple mode is explicitly enabled.

@@ -143,6 +143,8 @@ class ReleaseMatrixTest(unittest.TestCase):
                 self.assertEqual(output['version'], '0.2.21-custom.1')
                 self.assertEqual(output['host_version'], '0.2.21+custom.1')
                 self.assertEqual(output['custom'], 'true')
+                self.assertEqual(output['simple'], 'true')
+                self.assertEqual(json.loads(output['matrix'])['include'], [{'goos': 'linux', 'goarch': 'amd64'}])
                 self.assertEqual(release.VERSION_FILE.read_text(), '0.2.21+custom.1\n')
 
     def test_custom_release_notes_bind_verified_artifacts(self):

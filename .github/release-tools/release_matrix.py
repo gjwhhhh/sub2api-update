@@ -78,15 +78,16 @@ def plan(args):
         tagged_sha = subprocess.check_output(['git', 'rev-parse', '--verify', f'refs/tags/{tag}^{{commit}}'], text=True).strip()
         if sha != tagged_sha:
             raise ValueError('checkout does not match the selected release tag')
+    simple = args.simple or tag.startswith('custom-v')
     if not VERSION_RE.fullmatch(version):
         raise ValueError('invalid VERSION')
     VERSION_FILE.write_text(host_version + '\n')
     result = {'sha': sha, 'tag': tag, 'version': version,
               'host_version': host_version, 'custom': str(tag.startswith('custom-v')).lower(),
               'owner_lower': os.environ.get('GITHUB_REPOSITORY_OWNER', '').lower(),
-              'simple': str(args.simple).lower(), 'dry_run': str(args.dry_run).lower(),
+              'simple': str(simple).lower(), 'dry_run': str(args.dry_run).lower(),
               'date': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
-              'matrix': json.dumps({'include': targets(args.simple)}, separators=(',', ':'))}
+              'matrix': json.dumps({'include': targets(simple)}, separators=(',', ':'))}
     with Path(os.environ['GITHUB_OUTPUT']).open('a') as output:
         for key, value in result.items():
             output.write(f'{key}={value}\n')

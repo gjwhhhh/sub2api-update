@@ -156,7 +156,7 @@ UI 直接读取同源 `localStorage.auth_token`，不是官方插件 UI Bridge�
 - 可选验证分支：较大改动或上游升级需要隔离验证时，从 `custom` 创建短期分支；通过验证后合回 `custom`，它们不承担长期交付职责。日常定制可直接在长期主线上推进。
 - 发布 tag：从已验证的 `custom` 提交创建独立命名的定制 tag，例如 `custom-v0.2.21.1`，对应固定镜像/二进制。部署引用已验证的发布版本，而不是自动跟随分支最新提交。
 
-当前 `origin` 指向自有 fork `gjwhhhh/sub2api-update`，公共上游 `Wei-Shaw/sub2api` 保留为 `upstream`。本地 `custom` 跟踪 `origin/custom`，默认 push 目标为 `origin`。Actions 已启用，`SIMPLE_RELEASE=false`，发布 job 使用 GitHub 自动提供的 Token 及显式写权限。发布 tag 目前仅在本地，未推送；远程配置和后续操作见维护手册。
+当前 `origin` 指向自有 fork `gjwhhhh/sub2api-update`，公共上游 `Wei-Shaw/sub2api` 保留为 `upstream`。本地 `custom` 跟踪 `origin/custom`，默认 push 目标为 `origin`。Actions 已启用，`SIMPLE_RELEASE=false`；后续自定义 tag 自动选择 Linux amd64 GHCR 简化发布，普通上游 tag 仍保留完整矩阵。发布 job 使用 GitHub 自动提供的 Token 及显式写权限。发布 tag 目前仅在本地，未推送；远程配置和后续操作见维护手册。
 
 长期分支通过 merge 保留上游与自定义历史；已共享的主线不做 rebase 或强推改写。
 

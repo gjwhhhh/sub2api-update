@@ -6,7 +6,7 @@
 
 - `origin`：`git@github.com:gjwhhhh/sub2api-update.git`，用于定制代码备份、CI 和发布。
 - `upstream`：`https://github.com/Wei-Shaw/sub2api.git`，用于获取官方 tag 和合并升级。
-- Actions 和 Release workflow 已启用。仓库变量 `SIMPLE_RELEASE=false`，保留五个系统/架构的安装包及两个 Linux 架构的镜像。
+- Actions 和 Release workflow 已启用。仓库变量 `SIMPLE_RELEASE=false`；普通上游 `vX.Y.Z` tag 保留完整矩阵，自定义 `custom-vX.Y.Z.N` tag 自动只发布 Linux amd64 GHCR 镜像。
 - workflow 的 release job 单独声明 `contents: write`、`packages: write`，使用 GitHub 自动提供的 `GITHUB_TOKEN`；无需额外保存个人 Token，也无需扩大所有 workflow 的默认权限。
 - GHCR 镜像路径为 `ghcr.io/gjwhhhh/sub2api`，由发布 helper 固定使用镜像名 `sub2api`，与仓库名 `sub2api-update` 不同。Docker Hub 和 Telegram 凭证未配置，因此对应发布/通知步骤会跳过。
 
@@ -26,6 +26,8 @@ git push origin custom-v0.2.21.2
 ```
 
 revision 1 的 dry-run 只验证构建，不发布。安全修复 revision 2 已通过 CI 和安全扫描后推送 tag，并完成正式发布。后续修复使用新提交和新 revision；不移动已有 tag。dry-run 验证打包和镜像构建，不执行镜像推送或 Release 创建。
+
+后续 `custom-vX.Y.Z.N` 发布自动使用简化矩阵，只构建 Linux amd64 GHCR 镜像（版本 tag 与 `custom-latest`），不生成跨平台安装包或 arm64 镜像。已发布的 `custom-v0.2.21.2` 不受影响；新的发布策略从包含此逻辑的提交之后生效。
 
 2026-11-13 首次完整 dry-run 已通过：[运行 43376509485](https://github.com/gjwhhhh/sub2api-update/actions/runs/43376509485)，来源提交为 `03f87b3676ed173ad9dbff0e1850e71d1edd9bb8`。前端构建、Linux/macOS 的 amd64/arm64、Windows amd64 共五个安装包、制品来源和校验和检查，以及两个 Linux 架构的 Docker 镜像构建均成功。安装包可从该运行的 `release-binary-*` Artifacts 下载；当前保留期为 1 天，dry-run 报告保留 3 天。长期下载需正式发布 Release。
 
