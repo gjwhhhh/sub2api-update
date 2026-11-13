@@ -193,6 +193,8 @@ UI 直接读取同源 `localStorage.auth_token`，不是官方插件 UI Bridge�
 
 源码交付标准：既有功能和历史兼容；指纹恢复测试确定性问题已解决；模块生命周期与状态归属明确；完整构建及相关测试通过；权限与单/多实例范围明确；升级、回退及账户写回风险有文档说明。模块 Race 测试、服务器构建、前端 30 个测试文件（586 项）与生产构建、发布 helper 测试、shell 语法检查及 golangci-lint 均通过。集成测试已补跑，缺镜像导致的限流包失败在拉取镜像后补跑通过，既有条件跳过项详见上文。全量单测仍有上述一项内存边界失败。测试环境烟测、正式发布和部署仍是独立后续事项，不能以源码构建代替它们。
 
+2026-11-13 本地打包预检补充：使用 `go test -tags=unit ./internal/service -run '^TestInflightEstimate_AccountMappingNoDBAndBoundedMemory$' -count=1` 单独复跑此前超限用例，结果通过。该结果表明失败未在单独运行时复现；尚不能替代全量单测重跑结果，也未据此修改内存阈值。
+
 ## 8. 主要代码证据
 
 来源仓库：`scripts/build.py`、`tests/support.py`、`patches/0004-admin-channel.patch`、`0005-inspection.patch`、`0006-evaluation-ui.patch`、`0007-sub2api-integration.patch`。
