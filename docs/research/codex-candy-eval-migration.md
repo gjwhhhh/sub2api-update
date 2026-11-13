@@ -195,6 +195,8 @@ UI 直接读取同源 `localStorage.auth_token`，不是官方插件 UI Bridge�
 
 2026-11-13 本地打包预检补充：使用 `go test -tags=unit ./internal/service -run '^TestInflightEstimate_AccountMappingNoDBAndBoundedMemory$' -count=1` 单独复跑此前超限用例，结果通过。该结果表明失败未在单独运行时复现；尚不能替代全量单测重跑结果，也未据此修改内存阈值。
 
+后续安全修复（定制 revision 2）：Go 已统一升级到 `1.27.4`，包含 `go.mod`、三个 Docker 构建入口和 CI 版本断言；本地 `govulncheck ./...` 已确认 0 项可达漏洞。此前内存测试后来也在单独进程复现，堆快照定位到测试 fixture 缺少生产构造函数初始化的费率解析器：每次调用会临时创建缓存及清理 goroutine。已让 fixture 复用解析器，并在堆测量后用 `runtime.KeepAlive` 保持被测缓存存活；8 MiB 阈值和业务断言保持不变。旧 revision 1 的验证结果保留为实施历史，新版本以升级后的 CI 和发布结果为准。
+
 ## 8. 主要代码证据
 
 来源仓库：`scripts/build.py`、`tests/support.py`、`patches/0004-admin-channel.patch`、`0005-inspection.patch`、`0006-evaluation-ui.patch`、`0007-sub2api-integration.patch`。
@@ -207,4 +209,4 @@ UI 直接读取同源 `localStorage.auth_token`，不是官方插件 UI Bridge�
 
 长期分支 `custom` 已完成源码迁移、模块化、定制发布适配及本地代码审阅。定制 tag `custom-vX.Y.Z.N` 映射为 `X.Y.Z-custom.N` 制品/镜像和 `X.Y.Z+custom.N` 服务版本；发布 helper 已有回归测试。完整结果见上方阶段 C。
 
-仍需在后续正式发布或部署前完成：更新 Go 工具链以处理安全扫描发现、解决或确认在途计费内存测试的超限原因、按需要补齐集成测试跳过项的环境配置、确认部署拓扑，并用选定账户完成烟测。Docker 集成测试已在本机补跑，结果和保留限制见上文。自有仓库和长期分支已配置并推送，远程完整打包 dry-run 已通过；发布 tag 未推送，本次远程配置不包含正式发布或部署。
+安全修复及内存 fixture 修正已完成，拟从 `custom` 发布 `custom-v0.2.21.2`；该版本不覆盖旧 tag。发布前执行升级后的 CI、安全扫描和正式打包流水线，发布结果以对应 Actions 运行及 Release 为准。部署前仍需按需要补齐集成测试跳过项的环境配置、确认单实例拓扑，并用选定账户完成烟测。源码发布不等于已部署或已完成真实账户验收。
