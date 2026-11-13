@@ -79,6 +79,10 @@ func newInflightEstimateGateway(t *testing.T, channelService *ChannelService) *G
 		billingService: billing,
 		resolver:       NewModelPricingResolver(channelService, billing),
 		channelService: channelService,
+		// Match NewGatewayService: reuse one resolver/cache across requests.
+		// Leaving it nil creates a fallback cache and janitor on every lookup,
+		// measuring fixture initialization instead of per-model cache growth.
+		userGroupRateResolver: newUserGroupRateResolver(nil, nil, 0, nil, "service.test"),
 	}
 }
 
@@ -459,6 +463,8 @@ func TestInflightEstimate_AccountMappingNoDBAndBoundedMemory(t *testing.T) {
 	}
 	runtime.GC()
 	runtime.ReadMemStats(&after)
+	// Keep the gateway and its caches live through the retained-heap measurement.
+	runtime.KeepAlive(svc)
 	require.Zero(t, repo.dbCalls.Load(), "no direct DB query on the request path")
 	require.Equal(t, int64(n), snap.reads.Load(), "unpriced lookups read the scheduler snapshot only")
 	require.Less(t, int64(after.HeapAlloc)-int64(before.HeapAlloc), int64(8<<20), "no per-model cache growth")
