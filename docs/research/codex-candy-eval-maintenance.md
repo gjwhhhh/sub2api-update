@@ -6,16 +6,16 @@
 
 - `origin`：`git@github.com:gjwhhhh/sub2api-update.git`，用于定制代码备份、CI 和发布。
 - `upstream`：`https://github.com/Wei-Shaw/sub2api.git`，用于获取官方 tag 和合并升级。
-- Actions 和 Release workflow 已启用。仓库变量 `SIMPLE_RELEASE=false`，保留五个系统/架构的安装包及两个 Linux 架构的镜像。
+- Actions 和 Release workflow 已启用。已核实 `server_tencent` 使用 Docker Compose 和 Linux amd64 镜像；仓库变量 `SIMPLE_RELEASE=true`，后续 tag 发布默认只构建 Linux amd64 GHCR 镜像，不发布 macOS、Windows、arm64 或二进制下载包。
 - workflow 的 release job 单独声明 `contents: write`、`packages: write`，使用 GitHub 自动提供的 `GITHUB_TOKEN`；无需额外保存个人 Token，也无需扩大所有 workflow 的默认权限。
 - GHCR 镜像路径为 `ghcr.io/gjwhhhh/sub2api`，由发布 helper 固定使用镜像名 `sub2api`，与仓库名 `sub2api-update` 不同。Docker Hub 和 Telegram 凭证未配置，因此对应发布/通知步骤会跳过。
 
-先推送分支，再手动执行不发布的完整打包验证：
+先推送分支，再手动执行不发布的服务器镜像打包验证：
 
 ```sh
 git push origin custom
 gh workflow run release.yml --repo gjwhhhh/sub2api-update --ref custom \
-  -f tag=custom -f dry_run=true -f simple_release=false
+  -f tag=custom -f dry_run=true
 gh run list --repo gjwhhhh/sub2api-update --workflow release.yml
 ```
 
@@ -34,6 +34,22 @@ revision 1 的 dry-run 只验证构建，不发布。安全修复 revision 2 已
 同次发布预检修复了在途计费内存测试的 fixture：原 fixture 缺少生产构造函数会初始化的可复用费率解析器，每次估算会临时创建 go-cache 及清理 goroutine，堆快照显示增长主要来自这些 goroutine。测试现在复用解析器，并使用 `runtime.KeepAlive` 保持被测缓存存活到堆测量结束；原 8 MiB 阈值、20,000 次未定价请求、不查数据库和快照读取次数断言均保留。
 
 revision 2 的 GitHub Actions 发布已通过：[Release 运行 43385349452](https://github.com/gjwhhhh/sub2api-update/actions/runs/43385349452)。已创建 GitHub Release [custom-v0.2.21.2](https://github.com/gjwhhhh/sub2api-update/releases/tag/custom-v0.2.21.2)，上传五个平台安装包和 SHA256 文件，并发布多架构 GHCR 镜像。
+
+后续精简发布复用已有 `SIMPLE_RELEASE` 模式，由自有仓库的 Actions 变量控制。自定义版本仍发布版本镜像及 `custom-latest` 别名，并创建 GitHub Release，但不附加二进制下载包。完整矩阵能力保留；确需恢复时先将仓库变量改为 `false`。手动输入 `simple_release=false` 不能覆盖值为 `true` 的仓库变量。已发布的 revision 2 及其下载包保持原样。
+
+## server_tencent 部署记录
+
+2026-11-13 已核实并完成单实例升级：
+
+- 平台：OpenCloudOS 9.6，`x86_64`，容器平台为 `linux/amd64`。
+- 部署文件：`/opt/sub2api/deploy/docker-compose.local.yml`，Compose 项目为 `deploy`，应用容器名为 `sub2api`。
+- 升级前：`weishaw/sub2api:latest`，实际服务版本 `0.2.20`。
+- 升级后：`ghcr.io/gjwhhhh/sub2api:0.2.21-custom.2`，实际服务版本 `0.2.21+custom.2`，来源提交 `6df10514ea15e3c5ae513a89598aea9b4b977132`。Compose 同时固定镜像 digest `sha256:d5c60308653cf8bf1596af3cdbeb8d4213acb1f9594d5b2a8d5b78621e93f0fc`。
+- 保留原持久挂载 `/opt/sub2api/deploy/data:/app/data` 和 `127.0.0.1:8082:8080` 端口映射。仅重建应用容器，PostgreSQL、Redis 和其他服务未重建。
+- 停止应用后生成数据库 custom-format dump、数据目录归档和部署配置备份，校验 dump 目录、归档可读性及 SHA256。备份目录为 `/opt/sub2api/backups/before-custom-v0.2.21.2-20261113-163150`，仅 root 可访问。
+- 备份目录内的 `rollback-image.sh` 可恢复原 Compose 配置及保留的本地旧镜像。它不恢复数据库；需要恢复数据库时应先停止应用并评估快照之后的写入。
+
+应用、数据库和 Redis 健康检查均通过，用户、账户及 API Key 数量与升级前一致。公网 `/health` 和 `/codex-eval` 均返回 200；评估及巡检状态接口在未登录时返回 401。自动巡检沿用默认关闭状态，未触发真实账户评估请求。管理员登录后的真实账户评估仍需按使用需求验收。
 
 ## 分清两条更新线
 

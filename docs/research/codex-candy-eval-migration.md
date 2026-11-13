@@ -156,7 +156,7 @@ UI 直接读取同源 `localStorage.auth_token`，不是官方插件 UI Bridge�
 - 可选验证分支：较大改动或上游升级需要隔离验证时，从 `custom` 创建短期分支；通过验证后合回 `custom`，它们不承担长期交付职责。日常定制可直接在长期主线上推进。
 - 发布 tag：从已验证的 `custom` 提交创建独立命名的定制 tag，例如 `custom-v0.2.21.1`，对应固定镜像/二进制。部署引用已验证的发布版本，而不是自动跟随分支最新提交。
 
-当前 `origin` 指向自有 fork `gjwhhhh/sub2api-update`，公共上游 `Wei-Shaw/sub2api` 保留为 `upstream`。本地 `custom` 跟踪 `origin/custom`，默认 push 目标为 `origin`。Actions 已启用，`SIMPLE_RELEASE=false`，发布 job 使用 GitHub 自动提供的 Token 及显式写权限。发布 tag 目前仅在本地，未推送；远程配置和后续操作见维护手册。
+当前 `origin` 指向自有 fork `gjwhhhh/sub2api-update`，公共上游 `Wei-Shaw/sub2api` 保留为 `upstream`。本地 `custom` 跟踪 `origin/custom`，默认 push 目标为 `origin`。Actions 已启用；核实服务器使用 Linux amd64 Docker 镜像后，已设置仓库变量 `SIMPLE_RELEASE=true`，后续默认只发布该架构的 GHCR 镜像。发布 job 使用 GitHub 自动提供的 Token 及显式写权限。安全修复 tag `custom-v0.2.21.2` 已推送、发布并部署至 `server_tencent`；远程配置、部署和回退记录见维护手册。
 
 长期分支通过 merge 保留上游与自定义历史；已共享的主线不做 rebase 或强推改写。
 
@@ -209,4 +209,4 @@ UI 直接读取同源 `localStorage.auth_token`，不是官方插件 UI Bridge�
 
 长期分支 `custom` 已完成源码迁移、模块化、定制发布适配及本地代码审阅。定制 tag `custom-vX.Y.Z.N` 映射为 `X.Y.Z-custom.N` 制品/镜像和 `X.Y.Z+custom.N` 服务版本；发布 helper 已有回归测试。完整结果见上方阶段 C。
 
-安全修复及内存 fixture 修正已完成并发布为 `custom-v0.2.21.2`，没有移动或覆盖旧 tag。Go `1.27.4` 下的 CI、govulncheck 与正式打包已通过。部署前仍需按需要补齐集成测试跳过项的环境配置、确认单实例拓扑，并用选定账户完成烟测。源码发布不等于已部署或已完成真实账户验收。
+安全修复及内存 fixture 修正已完成并发布为 `custom-v0.2.21.2`，没有移动或覆盖旧 tag。Go `1.27.4` 下的 CI、govulncheck 与正式打包已通过。2026-11-13 已将 `server_tencent` 从官方 `0.2.20` 升级为 `0.2.21+custom.2` 单实例容器，保留数据库和持久数据，健康检查、评估页面及未登录鉴权检查通过。自动巡检默认关闭，真实账户评估尚未执行；仍需按需要补齐集成测试跳过项的环境配置，并用选定账户完成真实请求验收。

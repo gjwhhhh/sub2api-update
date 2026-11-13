@@ -8,16 +8,18 @@ Go caches are isolated by target and refreshed on each source commit, with fallb
 
 All build jobs use the commit resolved by `prepare`, including a manual release's selected tag. Helper scripts come from the workflow revision and are passed as a run-local artifact, so older application tags do not need to contain the new scripts. The workflow serializes release runs to prevent simultaneous updates to moving image tags.
 
+The `gjwhhhh/sub2api-update` fork sets the Actions repository variable `SIMPLE_RELEASE=true` for its verified Linux amd64 Docker deployment on `server_tencent`. Future tag releases publish only that GHCR image. Custom versions retain the version tag and `custom-latest`, with no downloadable binary release assets. To restore the full matrix, set the repository variable to `false`; a manual `simple_release=false` input does not override a `true` repository variable.
+
 ## Validate without publication
 
 From a branch containing this workflow:
 
 ```bash
 gh workflow run release.yml --ref <branch> \
-  -f tag=<branch> -f dry_run=true -f simple_release=false
+  -f tag=<branch> -f dry_run=true
 ```
 
-A dry run builds all selected archives and both runtime images, verifies artifact provenance and produces the final checksum file. It exports images locally as OCI archives instead of pushing them. It skips registry logins, GitHub Release publication, DockerHub description updates, Telegram notifications and VERSION synchronization. Test the simple path separately with `simple_release=true`.
+A dry run builds the selected targets, verifies artifact provenance and exports runtime images locally as OCI archives instead of pushing them. It skips registry logins, GitHub Release publication, DockerHub description updates, Telegram notifications and VERSION synchronization. With `SIMPLE_RELEASE=true`, only Linux amd64 is built. With the repository variable unset or `false`, the default is the full matrix; `simple_release=true` selects the simple path for an individual run.
 
 Dry-run artifacts are available in the Actions run, including `release-dry-run-report`. Compare job start/end times, GoReleaser's build duration and cache restore results. Do not present an initial cold-cache run as a warmed-cache benchmark; publishing network time is not measured by dry runs.
 
